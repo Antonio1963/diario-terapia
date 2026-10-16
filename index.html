@@ -1,0 +1,507 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Diario Terapia</title>
+<meta name="theme-color" content="#1f6feb">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Terapia">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-192.png">
+<style>
+:root{--bg:#f4f6fa;--card:#fff;--fg:#1b2330;--muted:#5d6878;--line:#dfe4ec;--acc:#1f6feb;--ok:#1a7f37;--okbg:#e6f4ea;--warn:#9a6700;--warnbg:#fff4d6;--bad:#c62828;--badbg:#fdecec}
+@media (prefers-color-scheme:dark){:root{--bg:#0f141b;--card:#18202a;--fg:#e6edf3;--muted:#9aa7b4;--line:#2b3542;--acc:#4c8dff;--ok:#56d364;--okbg:#14301d;--warn:#e3b341;--warnbg:#332a10;--bad:#ff7b72;--badbg:#3a1616}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,"PingFang SC","Microsoft YaHei",sans-serif;padding-bottom:calc(72px + env(safe-area-inset-bottom))}
+header{position:sticky;top:0;z-index:5;background:var(--acc);color:#fff;padding:calc(10px + env(safe-area-inset-top)) 16px 10px;display:flex;align-items:center;gap:8px}
+header h1{font-size:18px;margin:0;flex:1}
+header button{background:rgba(255,255,255,.2);color:#fff;border:0}
+main{max-width:760px;margin:0 auto;padding:12px 16px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px 14px;margin:0 0 12px}
+.card h2{font-size:17px;margin:0 0 8px}
+.card h3{font-size:15px;margin:0 0 6px}
+.muted{color:var(--muted);font-size:14px}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.row>.grow{flex:1;min-width:120px}
+.between{justify-content:space-between}
+button,.btn{font:inherit;font-size:15px;padding:8px 12px;border-radius:8px;border:1px solid var(--line);background:var(--card);color:var(--fg);cursor:pointer;text-decoration:none;display:inline-block}
+button.pri{background:var(--acc);border-color:var(--acc);color:#fff}
+button.okb{background:var(--ok);border-color:var(--ok);color:#fff}
+button.danger{color:var(--bad)}
+button.small{padding:4px 8px;font-size:13px}
+input,select,textarea{font:inherit;font-size:16px;padding:8px;border-radius:8px;border:1px solid var(--line);background:var(--bg);color:var(--fg);max-width:100%}
+input[type=number]{width:90px}
+textarea{width:100%;min-height:120px}
+label.f{display:block;margin:8px 0}
+label.f span{display:block;font-size:14px;color:var(--muted);margin-bottom:3px}
+label.f input:not([type=number]),label.f select{width:100%}
+.slot{border-left:4px solid var(--acc)}
+.slot .time{font-size:20px;font-weight:600}
+.med{display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:8px 0;border-top:1px solid var(--line)}
+.med .n{flex:1;min-width:140px}
+.med.given{background:var(--okbg);margin:0 -14px;padding:8px 14px}
+.med.skipped{background:var(--badbg);margin:0 -14px;padding:8px 14px}
+.badge{font-size:12px;padding:2px 8px;border-radius:99px;white-space:nowrap}
+.b-ok{background:var(--okbg);color:var(--ok)}.b-bad{background:var(--badbg);color:var(--bad)}.b-mut{background:var(--line);color:var(--muted)}
+.banner{max-width:760px;margin:12px auto 0;padding:0 16px}
+.banner div{border-radius:10px;padding:10px 12px;display:flex;gap:8px;align-items:center;justify-content:space-between;flex-wrap:wrap}
+.b-warn{background:var(--warnbg);color:var(--warn)}.b-info{background:var(--card);border:1px solid var(--line);color:var(--muted)}
+table{width:100%;border-collapse:collapse;font-size:14px}
+th,td{text-align:left;padding:6px 4px;border-bottom:1px solid var(--line)}
+td.num,th.num{text-align:right}
+.neg{color:var(--bad);font-weight:600}
+nav{position:fixed;bottom:0;left:0;right:0;background:var(--card);border-top:1px solid var(--line);display:flex;padding-bottom:env(safe-area-inset-bottom);z-index:5}
+nav button{flex:1;min-width:0;border:0;border-radius:0;background:none;padding:8px 1px;font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--muted);display:flex;flex-direction:column;align-items:center;gap:2px}
+nav button .i{font-size:20px}
+nav button.on{color:var(--acc);font-weight:600}
+.datenav{display:flex;gap:8px;align-items:center;justify-content:space-between}
+.datenav b{text-align:center;flex:1}
+pre{white-space:pre-wrap;font:inherit;font-size:14px;background:var(--bg);padding:10px;border-radius:8px;margin:8px 0}
+</style>
+</head>
+<body>
+<header><h1 id="title">Diario Terapia</h1><button id="installBtn" class="small" hidden></button></header>
+<div id="banner" class="banner"></div>
+<main id="view"></main>
+<nav id="tabs"></nav>
+<input type="file" id="fileIn" accept="application/json,.json" hidden>
+<script src="i18n.js"></script>
+<script>
+'use strict';
+const KEY = 'diarioTerapia.v1';
+const uid = () => Math.random().toString(36).slice(2, 10);
+const pad = n => String(n).padStart(2, '0');
+const ymd = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+const parseD = s => { const [y, m, d] = s.split('-').map(Number); return new Date(y, m - 1, d); };
+const addDays = (s, n) => { const d = parseD(s); d.setDate(d.getDate() + n); return ymd(d); };
+const diffDays = (a, b) => Math.round((parseD(a) - parseD(b)) / 86400000);
+const todayStr = () => ymd(new Date());
+const nowHM = () => { const d = new Date(); return `${pad(d.getHours())}:${pad(d.getMinutes())}`; };
+const h = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const num = v => { const n = parseFloat(String(v).replace(',', '.')); return isFinite(n) ? n : 0; };
+const fmtN = n => String(Math.round(n * 100) / 100);
+
+
+function defaultState() {
+  return {
+    settings: { lang: 'it', senderName: '', patientName: '', waNumber: '', cycleDays: 30, alertDays: 3, msgTemplate: '' },
+    slots: ['08:00', '10:00', '13:00', '16:00', '20:00', '22:00'].map(time => ({ id: uid(), time, label: '' })),
+    meds: [],      // {id, name, unit, stock}
+    schedule: [],  // {id, slotId, medId, qty}
+    cycles: [],    // {id, prepDate, days, items:[{medId, name, taken, short}]}
+    log: {},       // "data|slotId|medId" -> {status, time, slotTime, medName, qty, unit}
+    patient: { birth: '', cf: '', doctor: '', phone: '', allergies: '', notes: '' },
+    docs: [],      // {id, kind:'plan'|'record', title, date, expiry, notes, fileName, fileType} - file in IndexedDB
+  };
+}
+let S;
+function load() {
+  try { const raw = localStorage.getItem(KEY); S = raw ? Object.assign(defaultState(), JSON.parse(raw)) : defaultState(); }
+  catch (e) { S = defaultState(); }
+  S.settings = Object.assign(defaultState().settings, S.settings);
+  S.patient = Object.assign(defaultState().patient, S.patient);
+}
+
+// ---- allegati (IndexedDB: localStorage è troppo piccolo per PDF e foto) ----
+const IDB = {
+  db: null,
+  open() {
+    if (this.db) return Promise.resolve(this.db);
+    return new Promise((res, rej) => {
+      const r = indexedDB.open('diarioTerapiaFiles', 1);
+      r.onupgradeneeded = () => r.result.createObjectStore('files');
+      r.onsuccess = () => res(this.db = r.result);
+      r.onerror = () => rej(r.error);
+    });
+  },
+  op(mode, fn) { return this.open().then(db => new Promise((res, rej) => { const tx = db.transaction('files', mode); const q = fn(tx.objectStore('files')); tx.oncomplete = () => res(q && q.result); tx.onerror = () => rej(tx.error); })); },
+  put(id, blob) { return this.op('readwrite', s => s.put(blob, id)); },
+  get(id) { return this.op('readonly', s => s.get(id)); },
+  del(id) { return this.op('readwrite', s => s.delete(id)); },
+};
+const blobToDataURL = b => new Promise(r => { const f = new FileReader(); f.onload = () => r(f.result); f.readAsDataURL(b); });
+const dataURLToBlob = u => fetch(u).then(r => r.blob());
+function save() { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) { alert('Errore di salvataggio: ' + e.message); } }
+
+function t(k, v) {
+  let s = (I18N[S.settings.lang] || I18N.it)[k] ?? I18N.it[k] ?? k;
+  if (v) for (const [a, b] of Object.entries(v)) s = s.split('{' + a + '}').join(b);
+  return s;
+}
+const locale = () => LOCALES[S.settings.lang] || 'it-IT';
+const fmtDate = s => parseD(s).toLocaleDateString(locale(), { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
+
+// ---- calcoli ----
+const medById = id => S.meds.find(m => m.id === id);
+const slotsSorted = () => [...S.slots].sort((a, b) => a.time.localeCompare(b.time));
+const dailyNeed = medId => S.schedule.filter(e => e.medId === medId).reduce((a, e) => a + num(e.qty), 0);
+const adminsPerDay = medId => S.schedule.filter(e => e.medId === medId).length;
+const threshold = medId => num(S.settings.cycleDays) * dailyNeed(medId);
+function shortages() {
+  return S.meds.filter(m => dailyNeed(m.id) > 0 && num(m.stock) < threshold(m.id))
+    .map(m => ({ m, stock: num(m.stock), thr: threshold(m.id), miss: threshold(m.id) - num(m.stock) }));
+}
+function cycleInfo(date = todayStr()) {
+  const c = S.cycles[S.cycles.length - 1];
+  if (!c) return null;
+  const day = diffDays(date, c.prepDate);
+  const alertDays = num(S.settings.alertDays);
+  return {
+    c, day,
+    start: addDays(c.prepDate, 1), end: addDays(c.prepDate, c.days),
+    alert: addDays(c.prepDate, c.days - alertDays),
+    left: c.days - day,
+    inAlert: day >= c.days - alertDays && day <= c.days,
+    ended: day > c.days,
+  };
+}
+
+// ---- messaggio carenze ----
+function shortMessage() {
+  const n = num(S.settings.cycleDays);
+  const lista = shortages().map(s => t('lineFmt', { name: s.m.name, miss: fmtN(s.miss), u: s.m.unit, stock: fmtN(s.stock), thr: fmtN(s.thr), n })).join('\n');
+  const tpl = (S.settings.msgTemplate || '').trim() || t('defaultMsg');
+  return tpl.split('{nome}').join(S.settings.senderName || '')
+    .split('{paziente}').join(S.settings.patientName || '')
+    .split('{data}').join(fmtDate(todayStr()))
+    .split('{lista}').join(lista || t('noShort'));
+}
+function download(name, text, type = 'text/plain;charset=utf-8') {
+  const blob = new Blob(['﻿' + text], { type });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob); a.download = name;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+}
+function waUrl(text) {
+  const nr = (S.settings.waNumber || '').replace(/\D/g, '').replace(/^00/, '');
+  return 'https://wa.me/' + nr + '?text=' + encodeURIComponent(text);
+}
+
+// ---- azioni ----
+let tab = 'today', viewDate = todayStr(), prepDateSel = todayStr();
+const A = {
+  tab(x) { tab = x; render(); window.scrollTo(0, 0); },
+  shiftDate(n) { viewDate = n === 0 ? todayStr() : addDays(viewDate, n); render(); },
+  setDate(v) { if (v) { viewDate = v; render(); } },
+  mark(slotId, medId, status) {
+    const k = `${viewDate}|${slotId}|${medId}`;
+    const e = S.schedule.find(x => x.slotId === slotId && x.medId === medId);
+    const m = medById(medId), sl = S.slots.find(x => x.id === slotId);
+    if (!status) delete S.log[k];
+    else S.log[k] = { status, time: viewDate === todayStr() ? nowHM() : sl.time, slotTime: sl.time, medName: m.name, qty: e ? e.qty : '', unit: m.unit };
+    save(); render();
+  },
+  markAll(slotId) {
+    S.schedule.filter(e => e.slotId === slotId).forEach(e => { if (!S.log[`${viewDate}|${slotId}|${e.medId}`]) A.mark(slotId, e.medId, 'given'); });
+  },
+  setTime(slotId, medId, v) { const k = `${viewDate}|${slotId}|${medId}`; if (S.log[k]) { S.log[k].time = v; save(); } },
+  addSlot() { S.slots.push({ id: uid(), time: '12:00', label: '' }); save(); render(); },
+  slotField(id, f, v) { const s = S.slots.find(x => x.id === id); s[f] = v; save(); if (f === 'time') render(); },
+  delSlot(id) {
+    const s = S.slots.find(x => x.id === id);
+    if (!confirm(t('removeSlotConfirm', { t: s.time }))) return;
+    S.slots = S.slots.filter(x => x.id !== id); S.schedule = S.schedule.filter(e => e.slotId !== id); save(); render();
+  },
+  addEntry(slotId) {
+    const medId = document.getElementById('sel_' + slotId).value, qty = num(document.getElementById('qty_' + slotId).value);
+    if (!medId || qty <= 0) return;
+    const ex = S.schedule.find(e => e.slotId === slotId && e.medId === medId);
+    if (ex) ex.qty = qty; else S.schedule.push({ id: uid(), slotId, medId, qty });
+    save(); render();
+  },
+  entryQty(id, v) { const e = S.schedule.find(x => x.id === id); e.qty = num(v); save(); render(); },
+  delEntry(id) { S.schedule = S.schedule.filter(e => e.id !== id); save(); render(); },
+  addMed() {
+    const name = document.getElementById('mName').value.trim();
+    if (!name) return;
+    S.meds.push({ id: uid(), name, unit: document.getElementById('mUnit').value.trim() || t('unitDefault'), stock: num(document.getElementById('mStock').value) });
+    S.meds.sort((a, b) => a.name.localeCompare(b.name));
+    save(); render();
+  },
+  medField(id, f, v) { const m = medById(id); m[f] = f === 'stock' ? num(v) : v.trim(); save(); render(); },
+  loadStock(id) {
+    const v = num(document.getElementById('ld_' + id).value);
+    if (!v) return;
+    medById(id).stock = num(medById(id).stock) + v; save(); render();
+  },
+  delMed(id) {
+    if (!confirm(t('deleteMedConfirm', { name: medById(id).name }))) return;
+    S.meds = S.meds.filter(m => m.id !== id); S.schedule = S.schedule.filter(e => e.medId !== id); save(); render();
+  },
+  prepare() {
+    const days = num(S.settings.cycleDays);
+    if (!confirm(t('prepareConfirm', { n: days, d: fmtDate(prepDateSel) }))) return;
+    const items = [];
+    S.meds.forEach(m => {
+      const need = days * dailyNeed(m.id);
+      if (need <= 0) return;
+      const taken = Math.min(num(m.stock), need);
+      m.stock = Math.round((num(m.stock) - taken) * 100) / 100;
+      items.push({ medId: m.id, name: m.name, unit: m.unit, need, taken, short: need - taken });
+    });
+    S.cycles.push({ id: uid(), prepDate: prepDateSel, days, items });
+    save(); render();
+  },
+  resizeCycle(v) {
+    const c = S.cycles[S.cycles.length - 1], n = Math.max(1, Math.round(num(v)));
+    if (!c || n === c.days) return;
+    c.items.forEach(i => {
+      const m = medById(i.medId), perDay = i.need / c.days;
+      const avail = (m ? num(m.stock) : 0) + i.taken;
+      i.need = perDay * n; i.taken = Math.min(avail, i.need); i.short = i.need - i.taken;
+      if (m) m.stock = Math.round((avail - i.taken) * 100) / 100;
+    });
+    c.days = n; save(); render();
+  },
+  undoPrep() {
+    const c = S.cycles[S.cycles.length - 1];
+    if (!c || !confirm(t('undoPrepConfirm', { d: fmtDate(c.prepDate) }))) return;
+    c.items.forEach(i => { const m = medById(i.medId); if (m) m.stock = num(m.stock) + i.taken; });
+    S.cycles.pop(); save(); render();
+  },
+  exportShort() { download(`farmaci-carenti-${todayStr()}.txt`, shortMessage()); },
+  sendWa() { window.open(waUrl(shortMessage()), '_blank'); },
+  copyMsg(btn) {
+    const txt = shortMessage();
+    (navigator.clipboard ? navigator.clipboard.writeText(txt) : Promise.reject()).then(() => { btn.textContent = t('copied'); }).catch(() => prompt('', txt));
+  },
+  pat(f, v) { S.patient[f] = v; save(); },
+  addDoc(kind) {
+    const g = id => document.getElementById(id + '_' + kind);
+    const title = g('dTitle').value.trim(), file = g('dFile').files[0];
+    if (!title && !file) return;
+    const d = { id: uid(), kind, title: title || file.name, date: g('dDate').value, expiry: kind === 'plan' ? g('dExp').value : '', notes: g('dNotes').value.trim(), fileName: file ? file.name : '', fileType: file ? file.type : '' };
+    const done = () => { S.docs.push(d); save(); render(); };
+    if (file) IDB.put(d.id, file).then(done).catch(e => alert(e.message)); else done();
+  },
+  openDoc(id) {
+    const d = S.docs.find(x => x.id === id);
+    const w = window.open('', '_blank');
+    IDB.get(id).then(b => {
+      if (!b) { if (w) w.close(); return; }
+      const url = URL.createObjectURL(b.type ? b : new Blob([b], { type: d.fileType }));
+      if (w) w.location.href = url; else location.href = url;
+    });
+  },
+  docField(id, f, v) { S.docs.find(x => x.id === id)[f] = v; save(); render(); },
+  delDoc(id) {
+    const d = S.docs.find(x => x.id === id);
+    if (!confirm(t('deleteDocConfirm', { t: d.title }))) return;
+    S.docs = S.docs.filter(x => x.id !== id); IDB.del(id).catch(() => {}); save(); render();
+  },
+  set(f, v) { S.settings[f] = ['cycleDays', 'alertDays'].includes(f) ? Math.max(0, Math.round(num(v))) : v; save(); render(); },
+  async exportJson() {
+    const files = {};
+    for (const d of S.docs) if (d.fileName) { const b = await IDB.get(d.id).catch(() => null); if (b) files[d.id] = await blobToDataURL(b); }
+    download(`diario-terapia-backup-${todayStr()}.json`, JSON.stringify({ ...S, files }), 'application/json');
+  },
+  importJson() { document.getElementById('fileIn').click(); },
+  exportDiary() {
+    const rows = Object.entries(S.log).map(([k, v]) => ({ d: k.split('|')[0], ...v })).sort((a, b) => (a.d + a.slotTime).localeCompare(b.d + b.slotTime));
+    let out = `${t('diaryTitle')}${S.settings.patientName ? ' - ' + S.settings.patientName : ''}\n`, last = '';
+    rows.forEach(r => {
+      if (r.d !== last) { out += `\n${fmtDate(r.d)}\n`; last = r.d; }
+      out += `  ${r.slotTime}  ${r.status === 'given' ? '✓ ' + t('given') + ' ' + r.time : '✗ ' + t('skippedLbl')}  ${r.medName} ${fmtN(num(r.qty))} ${r.unit}\n`;
+    });
+    download(`diario-terapia-${todayStr()}.txt`, out);
+  },
+};
+document.getElementById('fileIn').addEventListener('change', e => {
+  const f = e.target.files[0]; if (!f) return;
+  f.text().then(txt => {
+    let d;
+    try { d = JSON.parse(txt.replace(/^\ufeff/, '')); if (!d.meds || !d.slots) throw 0; } catch (err) { alert(t('importErr')); return; }
+    const files = d.files || {}; delete d.files;
+    S = Object.assign(defaultState(), d); S.patient = Object.assign(defaultState().patient, S.patient); save();
+    Promise.all(Object.entries(files).map(([id, u]) => dataURLToBlob(u).then(b => IDB.put(id, b)))).then(() => { render(); alert(t('importDone')); });
+    e.target.value = '';
+  });
+});
+
+// ---- viste ----
+function viewToday() {
+  const ci = cycleInfo(viewDate);
+  let cyc = t('noCycle');
+  if (ci) cyc = ci.day < 0 ? t('beforeCycle') : ci.day === 0 ? t('prepDay') : ci.ended ? t('cycleEnded') : t('dayOfCycle', { n: ci.day, tot: ci.c.days });
+  let html = `<div class="card"><div class="datenav"><button onclick="A.shiftDate(-1)">◀</button><b>${h(fmtDate(viewDate))}</b><button onclick="A.shiftDate(1)">▶</button></div>
+  <div class="row between" style="margin-top:8px"><span class="muted">${h(cyc)}</span>
+  <span class="row"><input type="date" value="${viewDate}" onchange="A.setDate(this.value)">${viewDate !== todayStr() ? `<button class="small" onclick="A.shiftDate(0)">${t('today')}</button>` : ''}</span></div></div>`;
+  const slots = slotsSorted();
+  if (!slots.length) return html + `<div class="card muted">${t('noSlots')}</div>`;
+  slots.forEach(sl => {
+    const entries = S.schedule.filter(e => e.slotId === sl.id && medById(e.medId));
+    html += `<div class="card slot"><div class="row between"><span><span class="time">${h(sl.time)}</span> <span class="muted">${h(sl.label)}</span></span>
+      ${entries.some(e => !S.log[`${viewDate}|${sl.id}|${e.medId}`]) ? `<button class="small" onclick="A.markAll('${sl.id}')">${t('markAll')}</button>` : ''}</div>`;
+    if (!entries.length) html += `<div class="muted">${t('emptySlot')}</div>`;
+    entries.forEach(e => {
+      const m = medById(e.medId), L = S.log[`${viewDate}|${sl.id}|${m.id}`];
+      html += `<div class="med ${L ? L.status : ''}"><div class="n"><b>${h(m.name)}</b> <span class="muted">${fmtN(num(e.qty))} ${h(m.unit)}</span></div>`;
+      if (!L) html += `<button class="okb" onclick="A.mark('${sl.id}','${m.id}','given')">✓ ${t('give')}</button><button onclick="A.mark('${sl.id}','${m.id}','skipped')">✗ ${t('skip')}</button>`;
+      else if (L.status === 'given') html += `<span class="muted">${t('given')}</span><input type="time" value="${h(L.time)}" onchange="A.setTime('${sl.id}','${m.id}',this.value)"><button class="small" onclick="A.mark('${sl.id}','${m.id}')">${t('undo')}</button>`;
+      else html += `<span class="muted">${t('skippedLbl')}</span><button class="small" onclick="A.mark('${sl.id}','${m.id}')">${t('undo')}</button>`;
+      html += `</div>`;
+    });
+    html += `</div>`;
+  });
+  return html;
+}
+function viewTherapy() {
+  let html = `<div class="card"><div class="row between"><h2>${t('slots')}</h2><button class="pri" onclick="A.addSlot()">+ ${t('addSlot')}</button></div>`;
+  if (!S.meds.length) html += `<div class="muted">${t('noMedsYet')}</div>`;
+  html += `</div>`;
+  slotsSorted().forEach(sl => {
+    html += `<div class="card slot"><div class="row"><input type="time" value="${h(sl.time)}" onchange="A.slotField('${sl.id}','time',this.value)">
+      <input class="grow" placeholder="${h(t('label'))}" value="${h(sl.label)}" onchange="A.slotField('${sl.id}','label',this.value)">
+      <button class="small danger" title="${h(t('removeSlot'))}" onclick="A.delSlot('${sl.id}')">🗑</button></div>`;
+    S.schedule.filter(e => e.slotId === sl.id && medById(e.medId)).forEach(e => {
+      const m = medById(e.medId);
+      html += `<div class="med"><div class="n">${h(m.name)}</div><input type="number" min="0" step="0.25" value="${e.qty}" onchange="A.entryQty('${e.id}',this.value)"> <span class="muted">${h(m.unit)}</span>
+        <button class="small danger" onclick="A.delEntry('${e.id}')">✕</button></div>`;
+    });
+    if (S.meds.length) html += `<div class="med"><select class="n" id="sel_${sl.id}"><option value="">${t('selectMed')}</option>${S.meds.map(m => `<option value="${m.id}">${h(m.name)}</option>`).join('')}</select>
+      <input type="number" id="qty_${sl.id}" min="0" step="0.25" value="1" aria-label="${h(t('qty'))}"><button onclick="A.addEntry('${sl.id}')">+ ${t('addToSlot')}</button></div>`;
+    html += `</div>`;
+  });
+  return html;
+}
+function viewStock() {
+  let html = `<div class="card"><h2>${t('addMed')}</h2><div class="row">
+    <input class="grow" id="mName" placeholder="${h(t('name'))}">
+    <input id="mUnit" placeholder="${h(t('unit'))}" value="${h(t('unitDefault'))}" style="width:120px">
+    <input type="number" id="mStock" min="0" placeholder="${h(t('initialStock'))}" aria-label="${h(t('initialStock'))}">
+    <button class="pri" onclick="A.addMed()">+ ${t('addToSlot')}</button></div></div>
+    <h2 style="font-size:17px">${t('stock')}</h2>`;
+  S.meds.forEach(m => {
+    const need = dailyNeed(m.id), thr = threshold(m.id), st = num(m.stock);
+    const badge = need <= 0 ? `<span class="badge b-mut">${t('notInTherapy')}</span>` : st < thr ? `<span class="badge b-bad">${t('short')} · ${t('missing')} ${fmtN(thr - st)}</span>` : `<span class="badge b-ok">${t('ok')}</span>`;
+    html += `<div class="card"><div class="row between"><input class="grow" value="${h(m.name)}" aria-label="${h(t('rename'))}" onchange="A.medField('${m.id}','name',this.value)" style="font-weight:600">${badge}</div>
+      <div class="row muted" style="margin:6px 0">${t('inStock')}: <b style="color:var(--fg)">${fmtN(st)} ${h(m.unit)}</b> · ${t('perDay')}: ${fmtN(need)} (${adminsPerDay(m.id)} ${t('adminsDay')}) · ${t('threshold')}: ${fmtN(thr)}</div>
+      <div class="row"><input type="number" id="ld_${m.id}" min="0" placeholder="+" aria-label="${h(t('load'))}"><button onclick="A.loadStock('${m.id}')">${t('load')}: ${t('loadBtn')}</button>
+      <span class="muted">${t('setStock')}</span><input type="number" value="${st}" onchange="A.medField('${m.id}','stock',this.value)">
+      <input value="${h(m.unit)}" aria-label="${h(t('unit'))}" style="width:110px" onchange="A.medField('${m.id}','unit',this.value)">
+      <button class="small danger" onclick="A.delMed('${m.id}')">🗑 ${t('deleteMed')}</button></div></div>`;
+  });
+  return html;
+}
+function viewSupply() {
+  const days = num(S.settings.cycleDays), ci = cycleInfo();
+  let html = `<div class="card"><h2>${t('supply')}</h2><p class="muted">${h(t('supplyHelp', { a: S.settings.alertDays }))}</p>
+    <div class="row"><label class="f"><span>${t('containers')}</span><input type="number" min="1" value="${days}" onchange="A.set('cycleDays',this.value)"></label>
+    <label class="f"><span>${t('alertDays')}</span><input type="number" min="0" value="${h(S.settings.alertDays)}" onchange="A.set('alertDays',this.value)"></label></div>
+    <p class="muted">${t('containersHelp')}</p>`;
+  if (ci) html += `<h3>${t('currentCycle')}</h3><table>
+    <tr><td>${t('prepDate')}</td><td>${fmtDate(ci.c.prepDate)}</td></tr>
+    <tr><td>${t('cyclePrepared')}</td><td><input type="number" min="1" value="${ci.c.days}" onchange="if(confirm(t('resizeConfirm',{n:this.value})))A.resizeCycle(this.value);else render()"></td></tr>
+    <tr><td>${t('startUse')}</td><td>${fmtDate(ci.start)}</td></tr>
+    <tr><td>${t('endCycle')}</td><td>${fmtDate(ci.end)}</td></tr>
+    <tr><td>${t('alertOn')}</td><td>${fmtDate(ci.alert)}</td></tr></table>
+    ${ci.c.items.filter(i => i.short > 0).map(i => `<div class="neg" style="margin-top:6px">${h(i.name)}: ${h(t('missingForPrep', { n: fmtN(i.short), u: i.unit, d: Math.floor(i.taken / (i.need / ci.c.days)) }))}</div>`).join('')}
+    <div style="margin-top:8px"><button class="danger" onclick="A.undoPrep()">${t('undoPrep')}</button></div>`;
+  html += `</div><div class="card"><h2>${t('prepare', { n: days })}</h2>
+    <label class="f"><span>${t('prepDate')}</span><input type="date" value="${prepDateSel}" onchange="prepDateSel=this.value"></label>
+    <h3>${t('preview')}</h3><table><tr><th></th><th class="num">${t('inStock')}</th><th class="num">${t('need')}</th><th class="num">${t('after')}</th></tr>`;
+  S.meds.filter(m => dailyNeed(m.id) > 0).forEach(m => {
+    const need = days * dailyNeed(m.id), after = num(m.stock) - need;
+    html += `<tr><td>${h(m.name)}</td><td class="num">${fmtN(num(m.stock))}</td><td class="num">${fmtN(need)}</td><td class="num ${after < 0 ? 'neg' : ''}">${fmtN(after)}</td></tr>`;
+  });
+  html += `</table><div style="margin-top:10px"><button class="pri" onclick="A.prepare()">📦 ${t('prepare', { n: days })}</button></div></div>`;
+  const sh = shortages();
+  html += `<div class="card" id="short"><h2>${t('shortList')} (${sh.length})</h2><p class="muted">${t('shortHelp', { n: days, m: days * 2 })}</p>`;
+  html += sh.length ? `<table><tr><th></th><th class="num">${t('inStock')}</th><th class="num">${t('threshold')}</th><th class="num">${t('missing')}</th></tr>${sh.map(s => `<tr><td>${h(s.m.name)}</td><td class="num">${fmtN(s.stock)}</td><td class="num">${fmtN(s.thr)}</td><td class="num neg">${fmtN(s.miss)} ${h(s.m.unit)}</td></tr>`).join('')}</table>` : `<div class="muted">${t('noShort')}</div>`;
+  html += `<h3 style="margin-top:12px">${t('message')}</h3><pre>${h(shortMessage())}</pre>
+    ${S.settings.waNumber ? '' : `<p class="muted">${t('waNoNumber')}</p>`}
+    <div class="row"><button class="okb" onclick="A.sendWa()">💬 ${t('sendWa')}</button><button onclick="A.exportShort()">⬇ ${t('exportTxt')}</button><button onclick="A.copyMsg(this)">${t('copy')}</button></div></div>`;
+  const prev = S.cycles.slice(0, -1).reverse();
+  html += `<div class="card"><h2>${t('history')}</h2>${prev.length ? prev.map(c => `<div>${fmtDate(c.prepDate)} → ${fmtDate(addDays(c.prepDate, c.days))}</div>`).join('') : `<span class="muted">${t('none')}</span>`}</div>`;
+  return html;
+}
+function daysTo(s) { return s ? diffDays(s, todayStr()) : null; }
+function expiringPlans() { return S.docs.filter(d => d.kind === 'plan' && d.expiry && daysTo(d.expiry) <= 30); }
+function docList(kind) {
+  const docs = S.docs.filter(d => d.kind === kind).sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+  if (!docs.length) return `<div class="muted">${t('noDocs')}</div>`;
+  return docs.map(d => {
+    let badge = '';
+    if (kind === 'plan' && d.expiry) { const n = daysTo(d.expiry); badge = n < 0 ? `<span class="badge b-bad">${t('expired')}</span>` : n <= 30 ? `<span class="badge b-bad">${t('expiresIn', { n })}</span>` : `<span class="badge b-ok">${t('valid')}</span>`; }
+    return `<div class="med"><div class="n"><input value="${h(d.title)}" style="width:100%;font-weight:600" onchange="A.docField('${d.id}','title',this.value)">
+      <div class="muted">${d.date ? fmtDate(d.date) : ''}${kind === 'plan' ? ` · ${t('docExpiry')}: <input type="date" value="${h(d.expiry)}" onchange="A.docField('${d.id}','expiry',this.value)">` : ''} ${badge}</div>
+      ${d.notes ? `<div style="white-space:pre-wrap;font-size:14px;margin-top:4px">${h(d.notes)}</div>` : ''}</div>
+      ${d.fileName ? `<button class="small" onclick="A.openDoc('${d.id}')">📎 ${t('openFile')}</button>` : ''}
+      <button class="small danger" onclick="A.delDoc('${d.id}')">🗑</button></div>`;
+  }).join('');
+}
+function docForm(kind) {
+  return `<details style="margin-top:10px"><summary><b>+ ${t('addDoc')}</b></summary>
+    <label class="f"><span>${t('docTitle')}</span><input id="dTitle_${kind}"></label>
+    <div class="row"><label class="f"><span>${t('docDate')}</span><input type="date" id="dDate_${kind}" value="${todayStr()}"></label>
+    ${kind === 'plan' ? `<label class="f"><span>${t('docExpiry')}</span><input type="date" id="dExp_${kind}"></label>` : ''}</div>
+    <label class="f"><span>${t('docNotes')}</span><textarea id="dNotes_${kind}" style="min-height:70px"></textarea></label>
+    <label class="f"><span>${t('attachFile')}</span><input type="file" id="dFile_${kind}" accept="application/pdf,image/*,.doc,.docx,.txt"></label>
+    <button class="pri" onclick="A.addDoc('${kind}')">${t('saveDoc')}</button></details>`;
+}
+function viewPatient() {
+  const p = S.patient, inp = (f, type = 'text') => `<input type="${type}" value="${h(p[f])}" onchange="A.pat('${f}',this.value)">`;
+  return `<div class="card"><h2>${t('patient')}</h2>
+    <label class="f"><span>${t('patientName')}</span><input value="${h(S.settings.patientName)}" onchange="A.set('patientName',this.value)"></label>
+    <div class="row"><label class="f grow"><span>${t('birthDate')}</span>${inp('birth', 'date')}</label><label class="f grow"><span>${t('fiscalCode')}</span>${inp('cf')}</label></div>
+    <div class="row"><label class="f grow"><span>${t('doctor')}</span>${inp('doctor')}</label><label class="f grow"><span>${t('phone')}</span>${inp('phone', 'tel')}</label></div>
+    <label class="f"><span>${t('allergies')}</span><textarea style="min-height:60px" onchange="A.pat('allergies',this.value)">${h(p.allergies)}</textarea></label>
+    <label class="f"><span>${t('clinicalNotes')}</span><textarea style="min-height:80px" onchange="A.pat('notes',this.value)">${h(p.notes)}</textarea></label></div>
+    <div class="card"><h2>📋 ${t('plans')}</h2>${docList('plan')}${docForm('plan')}</div>
+    <div class="card"><h2>🩺 ${t('records')}</h2>${docList('record')}${docForm('record')}</div>`;
+}
+function viewSettings() {
+  const s = S.settings, inp = (f, type = 'text', extra = '') => `<input type="${type}" value="${h(s[f])}" ${extra} onchange="A.set('${f}',this.value)">`;
+  return `<div class="card"><h2>${t('settings')}</h2>
+    <label class="f"><span>${t('language')}</span><select onchange="A.set('lang',this.value)">${Object.entries(LANGS).map(([k, v]) => `<option value="${k}" ${k === s.lang ? 'selected' : ''}>${v}</option>`).join('')}</select></label>
+    <label class="f"><span>${t('senderName')}</span>${inp('senderName')}</label>
+    <label class="f"><span>${t('patientName')}</span>${inp('patientName')}</label>
+    <label class="f"><span>${t('waNumber')}</span>${inp('waNumber', 'tel', `placeholder="${h(t('waNumberHint'))}"`)}<span>${t('waNumberHint')}</span></label>
+    <div class="row"><label class="f"><span>${t('cycleDays')}</span>${inp('cycleDays', 'number', 'min="1"')}</label>
+    <label class="f"><span>${t('alertDays')}</span>${inp('alertDays', 'number', 'min="0"')}</label></div>
+    <label class="f"><span>${t('msgTemplate')}</span><textarea placeholder="${h(t('defaultMsg'))}" onchange="A.set('msgTemplate',this.value)">${h(s.msgTemplate)}</textarea><span>${h(t('msgTemplateHint'))}</span></label></div>
+    <div class="card"><h2>${t('backup')}</h2><div class="row"><button onclick="A.exportJson()">⬇ ${t('exportJson')}</button><button onclick="A.importJson()">⬆ ${t('importJson')}</button><button onclick="A.exportDiary()">⬇ ${t('exportDiary')}</button></div></div>`;
+}
+function renderBanner() {
+  const ci = cycleInfo(), out = [];
+  if (ci && ci.day >= 0) {
+    if (ci.ended) out.push(`<div class="b-warn">⚠ ${t('cycleEnded')}<button class="small" onclick="A.tab('supply')">${t('open')}</button></div>`);
+    else if (ci.inAlert) {
+      const k = shortages().length;
+      out.push(`<div class="${k ? 'b-warn' : 'b-info'}">${k ? '⚠ ' : ''}${t(k ? 'alertBanner' : 'alertBannerOk', { n: ci.left, k })}<button class="small" onclick="A.tab('supply');setTimeout(()=>document.getElementById('short').scrollIntoView(),50)">${t('open')}</button></div>`);
+    }
+  }
+  expiringPlans().forEach(d => out.push(`<div class="b-warn">⚠ ${h(t('planBanner', { t: d.title, d: fmtDate(d.expiry) }))}<button class="small" onclick="A.tab('patient')">${t('open')}</button></div>`));
+  document.getElementById('banner').innerHTML = out.join('<div style="height:6px;padding:0"></div>');
+}
+const TABS = [['today', '📅', 'tabToday'], ['therapy', '💊', 'tabTherapy'], ['stock', '📦', 'tabStock'], ['supply', '🚚', 'tabSupply'], ['patient', '👤', 'tabPatient'], ['settings', '⚙️', 'tabSettings']];
+function render() {
+  document.documentElement.lang = S.settings.lang;
+  document.title = t('appTitle');
+  document.getElementById('title').textContent = t('appTitle') + (S.settings.patientName ? ' · ' + S.settings.patientName : '');
+  document.getElementById('tabs').innerHTML = TABS.map(([k, i, l]) => `<button class="${tab === k ? 'on' : ''}" onclick="A.tab('${k}')"><span class="i">${i}</span>${t(l)}</button>`).join('');
+  renderBanner();
+  document.getElementById('view').innerHTML = { today: viewToday, therapy: viewTherapy, stock: viewStock, supply: viewSupply, patient: viewPatient, settings: viewSettings }[tab]();
+  const ib = document.getElementById('installBtn'); ib.textContent = t('install'); ib.hidden = !deferredPrompt;
+}
+
+// ---- installazione PWA ----
+let deferredPrompt = null;
+window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); deferredPrompt = e; render(); });
+document.getElementById('installBtn').onclick = () => { if (deferredPrompt) { deferredPrompt.prompt(); deferredPrompt = null; render(); } };
+if ('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('sw.js').catch(() => {});
+// richiede al browser di non cancellare i dati salvati
+if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
+
+load(); render();
+// aggiorna banner e "oggi" al cambio di giorno
+let lastDay = todayStr();
+setInterval(() => { if (todayStr() !== lastDay) { if (viewDate === lastDay) viewDate = todayStr(); lastDay = todayStr(); render(); } }, 60000);
+</script>
+</body>
+</html>
