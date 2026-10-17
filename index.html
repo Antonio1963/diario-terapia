@@ -182,8 +182,7 @@ function cycleInfo(date = todayStr()) {
 
 // ---- messaggio carenze ----
 function shortMessage() {
-  const n = num(S.settings.cycleDays);
-  const lista = shortages().map(s => t('lineFmt', { name: s.m.name, miss: fmtN(s.miss), u: s.m.unit, stock: fmtN(s.stock), thr: fmtN(s.thr), n })).join('\n');
+  const lista = shortages().map(s => '- ' + s.m.name).join('\n');
   const tpl = (S.settings.msgTemplate || '').trim() || t('defaultMsg');
   return tpl.split('{nome}').join(S.settings.senderName || '')
     .split('{paziente}').join(S.settings.patientName || '')
@@ -243,6 +242,7 @@ const A = {
     S.meds.sort((a, b) => a.name.localeCompare(b.name));
     save(); render();
   },
+  // value e notes sono campi liberi: non entrano in nessun calcolo
   medField(id, f, v) { const m = medById(id); m[f] = f === 'stock' ? num(v) : v.trim(); save(); render(); },
   loadStock(id) {
     const v = num(document.getElementById('ld_' + id).value);
@@ -439,7 +439,9 @@ function viewStock() {
       <div class="row"><input type="number" id="ld_${m.id}" min="0" placeholder="+" aria-label="${h(t('load'))}"><button onclick="A.loadStock('${m.id}')">${t('load')}: ${t('loadBtn')}</button>
       <span class="muted">${t('setStock')}</span><input type="number" value="${st}" onchange="A.medField('${m.id}','stock',this.value)">
       <input value="${h(m.unit)}" aria-label="${h(t('unit'))}" style="width:110px" onchange="A.medField('${m.id}','unit',this.value)">
-      <button class="small danger" onclick="A.delMed('${m.id}')">🗑 ${t('deleteMed')}</button></div></div>`;
+      <button class="small danger" onclick="A.delMed('${m.id}')">🗑 ${t('deleteMed')}</button></div>
+      <div class="row" style="margin-top:8px"><label class="f" style="margin:0"><span>${t('medValue')}</span><input type="number" step="any" value="${h(m.value ?? '')}" onchange="A.medField('${m.id}','value',this.value)"></label>
+      <label class="f grow" style="margin:0"><span>${t('medNotes')}</span><textarea style="min-height:44px" onchange="A.medField('${m.id}','notes',this.value)">${h(m.notes || '')}</textarea></label></div></div>`;
   });
   return html;
 }
