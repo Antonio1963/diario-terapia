@@ -64,7 +64,7 @@ nav button .i{font-size:20px}
 nav button.on{color:var(--acc);font-weight:600}
 .datenav{display:flex;gap:8px;align-items:center;justify-content:space-between}
 .datenav b{text-align:center;flex:1}
-#byline{position:fixed;left:2px;top:50%;writing-mode:vertical-rl;transform:translateY(-50%) rotate(180deg);font-size:12px;letter-spacing:2px;color:var(--fg);opacity:.16;pointer-events:none;user-select:none;z-index:6;white-space:nowrap}
+#byline{position:fixed;left:2px;top:50%;writing-mode:vertical-rl;transform:translateY(-50%) rotate(180deg);font-size:36px;letter-spacing:6px;color:var(--fg);opacity:.16;pointer-events:none;user-select:none;z-index:6;white-space:nowrap}
 main,.banner{padding-left:max(22px,env(safe-area-inset-left))}
 nav button{font-size:10px}
 @media (max-width:420px){header h1{display:none}}
@@ -602,7 +602,7 @@ function viewStock() {
         ${[[1, t('freqDaily')], [2, t('freqEvery', { n: 2 })], [3, t('freqEvery', { n: 3 })], [7, t('freqWeekly')], [14, t('freqEvery', { n: 14 })], [28, t('freqEvery', { n: 28 })], [30, t('freqEvery', { n: 30 })]].map(([n, l]) => `<option value="${n}" ${every(m) === n ? 'selected' : ''}>${h(l)}</option>`).join('')}
         ${[1, 2, 3, 7, 14, 28, 30].includes(every(m)) ? '' : `<option selected>${h(freqLabel(m))}</option>`}<option value="other">${h(t('freqOther'))}</option></select></label>
         ${every(m) > 1 ? `<label class="f" style="margin:0"><span>${t('freqFrom')}</span><input type="date" value="${h(m.from || '')}" onchange="A.medField('${m.id}','from',this.value)"></label>` : ''}</div>
-      <div class="row" style="margin-top:8px"><label class="f" style="margin:0"><span>${t('medValue')}</span><input type="number" step="any" value="${h(m.value ?? '')}" onchange="A.medField('${m.id}','value',this.value)"></label>
+      <div class="row" style="margin-top:8px"><label class="f" style="margin:0"><span>${t('medValue')}</span><input type="text" value="${h(m.value ?? '')}" onchange="A.medField('${m.id}','value',this.value)"></label>
       <label class="f grow" style="margin:0"><span>${t('medNotes')}</span><textarea style="min-height:44px" onchange="A.medField('${m.id}','notes',this.value)">${h(m.notes || '')}</textarea></label></div></div>`;
   });
   return html + exportBtns('stock');
