@@ -4,6 +4,7 @@ window.LOCALES = { it: 'it-IT', en: 'en-GB', fr: 'fr-FR', es: 'es-ES', zh: 'zh-C
 
 window.I18N = {
   it: {
+    testBadge: 'VERSIONE DI PROVA',
     freq: "Frequenza",
     freqDaily: "Ogni giorno",
     freqWeekly: "Settimanale",
@@ -93,6 +94,7 @@ window.I18N = {
     lineFmt: '- {name}: {miss} {u} (in magazzino {stock}, servono {thr} per {n} giorni)',
   },
   en: {
+    testBadge: 'TEST VERSION',
     freq: "Frequency",
     freqDaily: "Every day",
     freqWeekly: "Weekly",
@@ -182,6 +184,7 @@ window.I18N = {
     lineFmt: '- {name}: {miss} {u} (in stock {stock}, {thr} needed for {n} days)',
   },
   fr: {
+    testBadge: 'VERSION DE TEST',
     freq: "Fréquence",
     freqDaily: "Tous les jours",
     freqWeekly: "Hebdomadaire",
@@ -271,6 +274,7 @@ window.I18N = {
     lineFmt: '- {name} : {miss} {u} (en stock {stock}, {thr} nécessaires pour {n} jours)',
   },
   es: {
+    testBadge: 'VERSIÓN DE PRUEBA',
     freq: "Frecuencia",
     freqDaily: "Todos los días",
     freqWeekly: "Semanal",
@@ -360,6 +364,7 @@ window.I18N = {
     lineFmt: '- {name}: {miss} {u} (en almacén {stock}, se necesitan {thr} para {n} días)',
   },
   zh: {
+    testBadge: '测试版',
     freq: "频率",
     freqDaily: "每天",
     freqWeekly: "每周",

@@ -20,6 +20,7 @@ body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.4 system-ui,-appl
 header{position:sticky;top:0;z-index:5;background:var(--acc);color:#fff;padding:calc(10px + env(safe-area-inset-top)) 16px 10px;display:flex;align-items:center;gap:8px}
 header h1{font-size:18px;margin:0;flex:1}
 header button{background:rgba(255,255,255,.2);color:#fff;border:0}
+#testBadge{background:#ffd33d;color:#3b2f00;font-size:11px;font-weight:700;padding:3px 6px;border-radius:6px;white-space:nowrap}
 header select{background:rgba(255,255,255,.2);color:#fff;border:0;font-size:15px;max-width:55%;padding:6px 8px}
 header select option{color:#000}
 header h1{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -72,7 +73,7 @@ pre{white-space:pre-wrap;font:inherit;font-size:14px;background:var(--bg);paddin
 </style>
 </head>
 <body>
-<header><h1 id="title">Diario Terapia</h1><select id="patSel" aria-label="Paziente" onchange="A.switchPatient(this.value)"></select><button id="installBtn" class="small" hidden></button></header>
+<header><h1 id="title">Diario Terapia</h1><span id="testBadge" hidden></span><select id="patSel" aria-label="Paziente" onchange="A.switchPatient(this.value)"></select><button id="installBtn" class="small" hidden></button></header>
 <div id="byline" aria-hidden="true">By Antonio Chitano</div>
 <div id="banner" class="banner"></div>
 <main id="view"></main>
@@ -731,6 +732,8 @@ function render() {
   document.documentElement.lang = P.lang;
   document.title = t('appTitle');
   document.getElementById('title').textContent = t('appTitle');
+  // la copia su GitHub Pages è l'ambiente di prova, la produzione gira sulla NAS
+  const tb = document.getElementById('testBadge'); tb.hidden = !/github\.io$|^localhost$|^127\./.test(location.hostname); tb.textContent = t('testBadge');
   document.getElementById('patSel').innerHTML = P.list.map(p => `<option value="${p.id}" ${p.id === P.current ? 'selected' : ''}>👤 ${h(p.name)}</option>`).join('') + `<option value="__new">+ ${h(t('addPatient'))}</option>`;
   if (locked()) {
     document.getElementById('tabs').innerHTML = '';
