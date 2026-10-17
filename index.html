@@ -155,7 +155,35 @@ async function verifyLicense(email, code) {
   } catch (e) { return false; }
 }
 let licensed = false, licChecked = false;
-const trialLeft = () => TRIAL_DAYS - diffDays(todayStr(), P.firstUse);
+// se l'orologio del dispositivo viene spostato indietro si usa l'ultimo giorno già visto
+const trialLeft = () => TRIAL_DAYS - diffDays([todayStr(), P.lastSeen || ''].sort().pop(), P.firstUse);
+// inizio prova, ultimo giorno visto e licenza sono copiati anche in IndexedDB, Cache e cookie:
+// cancellare solo una parte dei dati del sito non fa ripartire la prova
+const META = {
+  idb() { return new Promise(res => { try { const r = indexedDB.open('diarioTerapiaMeta', 1); r.onupgradeneeded = () => r.result.createObjectStore('m'); r.onsuccess = () => res(r.result); r.onerror = () => res(null); } catch (e) { res(null); } }); },
+  async read() {
+    const vals = [];
+    try { const m = document.cookie.match(/(?:^|; )dtm=([^;]+)/); if (m) vals.push(JSON.parse(decodeURIComponent(m[1]))); } catch (e) {}
+    try { const db = await this.idb(); if (db) vals.push(await new Promise(r => { const q = db.transaction('m').objectStore('m').get('meta'); q.onsuccess = () => r(q.result); q.onerror = () => r(null); })); } catch (e) {}
+    try { if (window.caches) { const r = await (await caches.open('diarioTerapiaMeta')).match('meta'); if (r) vals.push(await r.json()); } } catch (e) {}
+    return vals.filter(Boolean);
+  },
+  async write(v) {
+    const str = JSON.stringify(v);
+    try { document.cookie = 'dtm=' + encodeURIComponent(str) + ';max-age=315360000;path=/;SameSite=Lax'; } catch (e) {}
+    try { const db = await this.idb(); if (db) db.transaction('m', 'readwrite').objectStore('m').put(v, 'meta'); } catch (e) {}
+    try { if (window.caches) await (await caches.open('diarioTerapiaMeta')).put('meta', new Response(str)); } catch (e) {}
+  },
+};
+async function syncMeta() {
+  const all = [{ firstUse: P.firstUse, lastSeen: P.lastSeen, license: P.license }, ...await META.read()];
+  const valid = x => typeof x === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(x);
+  P.firstUse = all.map(x => x.firstUse).filter(valid).sort()[0] || todayStr();
+  P.lastSeen = [todayStr(), ...all.map(x => x.lastSeen).filter(valid)].sort().pop();
+  if (!P.license) P.license = all.map(x => x.license).find(x => x && x.email && x.code) || undefined;
+  saveProfiles();
+  await META.write({ firstUse: P.firstUse, lastSeen: P.lastSeen, license: P.license });
+}
 const locked = () => licChecked && !licensed && trialLeft() <= 0;
 
 // ---- allegati (IndexedDB: localStorage è troppo piccolo per PDF e foto) ----
@@ -351,7 +379,7 @@ const A = {
   },
   async unlock() {
     const em = normEmail(document.getElementById('licEmail').value), code = document.getElementById('licCode').value;
-    if (await verifyLicense(em, code)) { P.license = { email: em, code: code.trim() }; saveProfiles(); licensed = true; render(); alert(t('licOk')); }
+    if (await verifyLicense(em, code)) { P.license = { email: em, code: code.trim() }; saveProfiles(); licensed = true; syncMeta().catch(() => {}); render(); alert(t('licOk')); }
     else alert(t('licWrong'));
   },
   exportShort() { download(`farmaci-carenti-${todayStr()}.txt`, shortMessage()); },
@@ -461,9 +489,9 @@ document.getElementById('fileIn').addEventListener('change', e => {
     // il backup porta con sé l'inizio della prova: importarlo dopo aver cancellato i dati non fa ripartire i 100 giorni
     const dates = d.trialStart ? [d.trialStart] : [...(d.cycles || []).map(c => c.prepDate), ...Object.keys(d.log || {}).map(k => k.split('|')[0])];
     const start = dates.filter(x => /^\d{4}-\d{2}-\d{2}$/.test(x)).sort()[0];
-    if (start && start < P.firstUse) { P.firstUse = start; saveProfiles(); }
+    if (start && start < P.firstUse) { P.firstUse = start; saveProfiles(); await syncMeta(); }
     const lic = d.license; delete d.trialStart; delete d.license;
-    if (!licensed && lic && await verifyLicense(lic.email, lic.code)) { P.license = lic; saveProfiles(); licensed = true; }
+    if (!licensed && lic && await verifyLicense(lic.email, lic.code)) { P.license = lic; saveProfiles(); licensed = true; await syncMeta(); }
     // i documenti ricevono id nuovi così un backup importato due volte non sovrascrive gli allegati dell'altro paziente
     const remap = {};
     (d.docs || []).forEach(x => { remap[x.id] = uid(); x.id = remap[x.id]; });
@@ -725,10 +753,10 @@ if ('serviceWorker' in navigator && location.protocol.startsWith('http')) naviga
 if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
 
 load(); render();
-(P.license ? verifyLicense(P.license.email, P.license.code) : Promise.resolve(false)).then(ok => { licensed = ok; licChecked = true; render(); });
+syncMeta().catch(() => {}).then(() => P.license ? verifyLicense(P.license.email, P.license.code) : false).then(ok => { licensed = ok; licChecked = true; render(); });
 // aggiorna banner e "oggi" al cambio di giorno
 let lastDay = todayStr();
-setInterval(() => { if (todayStr() !== lastDay) { if (viewDate === lastDay) viewDate = todayStr(); lastDay = todayStr(); render(); } }, 60000);
+setInterval(() => { if (todayStr() !== lastDay) { if (viewDate === lastDay) viewDate = todayStr(); lastDay = todayStr(); syncMeta().catch(() => {}); render(); } }, 60000);
 </script>
 </body>
 </html>
