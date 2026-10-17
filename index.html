@@ -63,11 +63,17 @@ nav button .i{font-size:20px}
 nav button.on{color:var(--acc);font-weight:600}
 .datenav{display:flex;gap:8px;align-items:center;justify-content:space-between}
 .datenav b{text-align:center;flex:1}
+#byline{position:fixed;left:2px;top:50%;writing-mode:vertical-rl;transform:translateY(-50%) rotate(180deg);font-size:12px;letter-spacing:2px;color:var(--fg);opacity:.16;pointer-events:none;user-select:none;z-index:6;white-space:nowrap}
+main,.banner{padding-left:max(22px,env(safe-area-inset-left))}
+nav button{font-size:10px}
+@media (max-width:420px){header h1{display:none}}
+nav button .l{display:block;max-width:100%;overflow:hidden;text-overflow:ellipsis}
 pre{white-space:pre-wrap;font:inherit;font-size:14px;background:var(--bg);padding:10px;border-radius:8px;margin:8px 0}
 </style>
 </head>
 <body>
 <header><h1 id="title">Diario Terapia</h1><select id="patSel" aria-label="Paziente" onchange="A.switchPatient(this.value)"></select><button id="installBtn" class="small" hidden></button></header>
+<div id="byline" aria-hidden="true">By Antonio Chitano</div>
 <div id="banner" class="banner"></div>
 <main id="view"></main>
 <nav id="tabs"></nav>
@@ -123,8 +129,34 @@ function load() {
     saveProfiles();
   }
   if (!P.list.some(p => p.id === P.current)) P.current = P.list[0].id;
+  if (!P.firstUse) { P.firstUse = todayStr(); saveProfiles(); }
   try { S = normalize(JSON.parse(localStorage.getItem(dataKey(P.current)) || 'null') || {}); } catch (e) { S = defaultState(); }
 }
+
+// ---- licenza: 100 giorni di prova, poi codice di sblocco legato all'email ----
+// Il codice è una firma ECDSA P-256 di "diario-terapia|<email>": l'app contiene solo la chiave pubblica,
+// la chiave privata resta nel generatore di Antonio (non pubblicato).
+const TRIAL_DAYS = 100, SUPPORT_EMAIL = 'dep.kit@gmail.com', PRICE = '3,90';
+const LIC_PUB = {"kty":"EC","crv":"P-256","x":"JPoy5NR5MnjkYyJBAy9ndboHpzeq_se4KdPGF3ecS6w","y":"d7BVfjU9I3b-bqG86uaupOFuVOg43PREuxIdFPpiMQo"};
+const B32 = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';
+function b32dec(str) {
+  str = String(str).toUpperCase().replace(/O/g, '0').replace(/[IL]/g, '1').replace(/[^0-9A-Z]/g, '');
+  let bits = 0, val = 0; const out = [];
+  for (const c of str) { const i = B32.indexOf(c); if (i < 0) return null; val = ((val << 5) | i) & 0xfff; bits += 5; if (bits >= 8) { bits -= 8; out.push((val >> bits) & 255); } }
+  return new Uint8Array(out);
+}
+const normEmail = e => String(e || '').trim().toLowerCase();
+async function verifyLicense(email, code) {
+  try {
+    const sig = b32dec(code);
+    if (!sig || sig.length !== 64 || !normEmail(email)) return false;
+    const key = await crypto.subtle.importKey('jwk', { ...LIC_PUB, ext: true }, { name: 'ECDSA', namedCurve: 'P-256' }, false, ['verify']);
+    return await crypto.subtle.verify({ name: 'ECDSA', hash: 'SHA-256' }, key, sig, new TextEncoder().encode('diario-terapia|' + normEmail(email)));
+  } catch (e) { return false; }
+}
+let licensed = false, licChecked = false;
+const trialLeft = () => TRIAL_DAYS - diffDays(todayStr(), P.firstUse);
+const locked = () => licChecked && !licensed && trialLeft() <= 0;
 
 // ---- allegati (IndexedDB: localStorage è troppo piccolo per PDF e foto) ----
 const IDB = {
@@ -158,9 +190,29 @@ const fmtDate = s => parseD(s).toLocaleDateString(locale(), { weekday: 'short', 
 // ---- calcoli ----
 const medById = id => S.meds.find(m => m.id === id);
 const slotsSorted = () => [...S.slots].sort((a, b) => a.time.localeCompare(b.time));
-const dailyNeed = medId => S.schedule.filter(e => e.medId === medId).reduce((a, e) => a + num(e.qty), 0);
+// frequenza: il farmaco si dà ogni "every" giorni a partire da "from" (1 = ogni giorno)
+const every = m => Math.max(1, Math.round(num(m && m.every) || 1));
+function isDue(m, date) {
+  const n = every(m);
+  if (n === 1) return true;
+  const from = m.from || date;
+  return date >= from && diffDays(date, from) % n === 0;
+}
+const qtyPerDose = medId => S.schedule.filter(e => e.medId === medId).reduce((a, e) => a + num(e.qty), 0);
+const dailyNeed = medId => qtyPerDose(medId) / every(medById(medId));
 const adminsPerDay = medId => S.schedule.filter(e => e.medId === medId).length;
-const threshold = medId => num(S.settings.cycleDays) * dailyNeed(medId);
+// dosi necessarie per i contenitori dei giorni start+1 .. start+days
+function needFor(medId, start, days) {
+  const m = medById(medId), q = qtyPerDose(medId);
+  if (!m || q <= 0) return 0;
+  let n = 0;
+  for (let k = 1; k <= days; k++) if (isDue(m, addDays(start, k))) n++;
+  return Math.round(q * n * 100) / 100;
+}
+// la soglia guarda il prossimo ciclo: parte dalla fine di quello in corso, oppure da oggi
+function nextStart() { const c = S.cycles[S.cycles.length - 1]; return c && addDays(c.prepDate, c.days) > todayStr() ? addDays(c.prepDate, c.days) : todayStr(); }
+const threshold = medId => needFor(medId, nextStart(), num(S.settings.cycleDays));
+function freqLabel(m) { const n = every(m); return n === 1 ? t('freqDaily') : n === 7 ? t('freqWeekly') : t('freqEvery', { n }); }
 function shortages() {
   return S.meds.filter(m => dailyNeed(m.id) > 0 && num(m.stock) < threshold(m.id))
     .map(m => ({ m, stock: num(m.stock), thr: threshold(m.id), miss: threshold(m.id) - num(m.stock) }));
@@ -216,7 +268,7 @@ const A = {
     save(); render();
   },
   markAll(slotId) {
-    S.schedule.filter(e => e.slotId === slotId).forEach(e => { if (!S.log[`${viewDate}|${slotId}|${e.medId}`]) A.mark(slotId, e.medId, 'given'); });
+    S.schedule.filter(e => e.slotId === slotId && isDue(medById(e.medId), viewDate)).forEach(e => { if (!S.log[`${viewDate}|${slotId}|${e.medId}`]) A.mark(slotId, e.medId, 'given'); });
   },
   setTime(slotId, medId, v) { const k = `${viewDate}|${slotId}|${medId}`; if (S.log[k]) { S.log[k].time = v; save(); } },
   addSlot() { S.slots.push({ id: uid(), time: '12:00', label: '' }); save(); render(); },
@@ -244,6 +296,13 @@ const A = {
   },
   // value e notes sono campi liberi: non entrano in nessun calcolo
   medField(id, f, v) { const m = medById(id); m[f] = f === 'stock' ? num(v) : v.trim(); save(); render(); },
+  setEvery(id, v) {
+    const m = medById(id);
+    if (v === 'other') { v = prompt(t('freqAsk'), every(m)); if (v === null) { render(); return; } }
+    m.every = Math.max(1, Math.round(num(v)) || 1);
+    if (m.every > 1 && !m.from) m.from = todayStr();
+    save(); render();
+  },
   loadStock(id) {
     const v = num(document.getElementById('ld_' + id).value);
     if (!v) return;
@@ -258,7 +317,7 @@ const A = {
     if (!confirm(t('prepareConfirm', { n: days, d: fmtDate(prepDateSel) }))) return;
     const items = [];
     S.meds.forEach(m => {
-      const need = days * dailyNeed(m.id);
+      const need = needFor(m.id, prepDateSel, days);
       if (need <= 0) return;
       const taken = Math.min(num(m.stock), need);
       m.stock = Math.round((num(m.stock) - taken) * 100) / 100;
@@ -271,9 +330,9 @@ const A = {
     const c = S.cycles[S.cycles.length - 1], n = Math.max(1, Math.round(num(v)));
     if (!c || n === c.days) return;
     c.items.forEach(i => {
-      const m = medById(i.medId), perDay = i.need / c.days;
+      const m = medById(i.medId);
       const avail = (m ? num(m.stock) : 0) + i.taken;
-      i.need = perDay * n; i.taken = Math.min(avail, i.need); i.short = i.need - i.taken;
+      i.need = m ? needFor(m.id, c.prepDate, n) : i.need / c.days * n; i.taken = Math.min(avail, i.need); i.short = i.need - i.taken;
       if (m) m.stock = Math.round((avail - i.taken) * 100) / 100;
     });
     c.days = n; save(); render();
@@ -283,6 +342,17 @@ const A = {
     if (!c || !confirm(t('undoPrepConfirm', { d: fmtDate(c.prepDate) }))) return;
     c.items.forEach(i => { const m = medById(i.medId); if (m) m.stock = num(m.stock) + i.taken; });
     S.cycles.pop(); save(); render();
+  },
+  requestCode() {
+    const em = normEmail(document.getElementById('licEmail').value);
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(em)) { alert(t('licBadEmail')); return; }
+    P.licEmail = em; saveProfiles();
+    location.href = `mailto:${SUPPORT_EMAIL}?subject=${encodeURIComponent(t('licMailSubject'))}&body=${encodeURIComponent(t('licMailBody', { email: em, price: PRICE }))}`;
+  },
+  async unlock() {
+    const em = normEmail(document.getElementById('licEmail').value), code = document.getElementById('licCode').value;
+    if (await verifyLicense(em, code)) { P.license = { email: em, code: code.trim() }; saveProfiles(); licensed = true; render(); alert(t('licOk')); }
+    else alert(t('licWrong'));
   },
   exportShort() { download(`farmaci-carenti-${todayStr()}.txt`, shortMessage()); },
   sendWa() { window.open(waUrl(shortMessage()), '_blank'); },
@@ -409,13 +479,13 @@ function viewToday() {
   const slots = slotsSorted();
   if (!slots.length) return html + `<div class="card muted">${t('noSlots')}</div>`;
   slots.forEach(sl => {
-    const entries = S.schedule.filter(e => e.slotId === sl.id && medById(e.medId));
+    const entries = S.schedule.filter(e => e.slotId === sl.id && medById(e.medId) && isDue(medById(e.medId), viewDate));
     html += `<div class="card slot"><div class="row between"><span><span class="time">${h(sl.time)}</span> <span class="muted">${h(sl.label)}</span></span>
       ${entries.some(e => !S.log[`${viewDate}|${sl.id}|${e.medId}`]) ? `<button class="small" onclick="A.markAll('${sl.id}')">${t('markAll')}</button>` : ''}</div>`;
     if (!entries.length) html += `<div class="muted">${t('emptySlot')}</div>`;
     entries.forEach(e => {
       const m = medById(e.medId), L = S.log[`${viewDate}|${sl.id}|${m.id}`];
-      html += `<div class="med ${L ? L.status : ''}"><div class="n"><b>${h(m.name)}</b> <span class="muted">${fmtN(num(e.qty))} ${h(m.unit)}</span></div>`;
+      html += `<div class="med ${L ? L.status : ''}"><div class="n"><b>${h(m.name)}</b> <span class="muted">${fmtN(num(e.qty))} ${h(m.unit)}</span>${every(m) > 1 ? ` <span class="badge b-mut">${h(freqLabel(m))}</span>` : ''}</div>`;
       if (!L) html += `<button class="okb" onclick="A.mark('${sl.id}','${m.id}','given')">✓ ${t('give')}</button><button onclick="A.mark('${sl.id}','${m.id}','skipped')">✗ ${t('skip')}</button>`;
       else if (L.status === 'given') html += `<span class="muted">${t('given')}</span><input type="time" value="${h(L.time)}" onchange="A.setTime('${sl.id}','${m.id}',this.value)"><button class="small" onclick="A.mark('${sl.id}','${m.id}')">${t('undo')}</button>`;
       else html += `<span class="muted">${t('skippedLbl')}</span><button class="small" onclick="A.mark('${sl.id}','${m.id}')">${t('undo')}</button>`;
@@ -428,18 +498,18 @@ function viewToday() {
 const exportTables = {
   stock: () => ({
     title: t('stock'), info: [],
-    head: [t('name'), t('unit'), t('inStock'), t('perDay'), t('colAdmins'), t('threshold'), t('status'), t('colMissing'), t('medValue'), t('medNotes')],
+    head: [t('name'), t('unit'), t('inStock'), t('perDay'), t('colAdmins'), t('freq'), t('threshold'), t('status'), t('colMissing'), t('medValue'), t('medNotes')],
     rows: S.meds.map(m => {
       const need = dailyNeed(m.id), thr = threshold(m.id), st = num(m.stock);
-      return [m.name, m.unit, fmtN(st), fmtN(need), adminsPerDay(m.id), fmtN(thr), need <= 0 ? t('notInTherapy') : st < thr ? t('short') : t('ok'), need > 0 && st < thr ? fmtN(thr - st) : '', m.value ?? '', (m.notes || '').replace(/\n/g, ' ')];
+      return [m.name, m.unit, fmtN(st), fmtN(need), adminsPerDay(m.id), freqLabel(m), fmtN(thr), need <= 0 ? t('notInTherapy') : st < thr ? t('short') : t('ok'), need > 0 && st < thr ? fmtN(thr - st) : '', m.value ?? '', (m.notes || '').replace(/\n/g, ' ')];
     }),
   }),
   therapy: () => ({
     title: t('tabTherapy'), info: [],
-    head: [t('time'), t('colSlotNote'), t('name'), t('qty'), t('unit')],
+    head: [t('time'), t('colSlotNote'), t('name'), t('qty'), t('unit'), t('freq')],
     rows: slotsSorted().flatMap(sl => {
       const es = S.schedule.filter(e => e.slotId === sl.id && medById(e.medId));
-      return es.length ? es.map(e => [sl.time, sl.label, medById(e.medId).name, fmtN(num(e.qty)), medById(e.medId).unit]) : [[sl.time, sl.label, '', '', '']];
+      return es.length ? es.map(e => [sl.time, sl.label, medById(e.medId).name, fmtN(num(e.qty)), medById(e.medId).unit, freqLabel(medById(e.medId))]) : [[sl.time, sl.label, '', '', '', '']];
     }),
   }),
   supply: () => {
@@ -451,7 +521,7 @@ const exportTables = {
       title: t('tabSupply'), info,
       head: [t('name'), t('unit'), t('inStock'), t('need'), t('after'), t('status'), t('colMissing')],
       rows: S.meds.filter(m => dailyNeed(m.id) > 0).map(m => {
-        const need = days * dailyNeed(m.id), st = num(m.stock);
+        const need = needFor(m.id, nextStart(), days), st = num(m.stock);
         return [m.name, m.unit, fmtN(st), fmtN(need), fmtN(st - need), st < need ? t('short') : t('ok'), st < need ? fmtN(need - st) : ''];
       }),
     };
@@ -468,7 +538,7 @@ function viewTherapy() {
       <button class="small danger" title="${h(t('removeSlot'))}" onclick="A.delSlot('${sl.id}')">🗑</button></div>`;
     S.schedule.filter(e => e.slotId === sl.id && medById(e.medId)).forEach(e => {
       const m = medById(e.medId);
-      html += `<div class="med"><div class="n">${h(m.name)}</div><input type="number" min="0" step="0.25" value="${e.qty}" onchange="A.entryQty('${e.id}',this.value)"> <span class="muted">${h(m.unit)}</span>
+      html += `<div class="med"><div class="n">${h(m.name)} <span class="muted" style="font-size:13px">${h(freqLabel(m))}</span></div><input type="number" min="0" step="0.25" value="${e.qty}" onchange="A.entryQty('${e.id}',this.value)"> <span class="muted">${h(m.unit)}</span>
         <button class="small danger" onclick="A.delEntry('${e.id}')">✕</button></div>`;
     });
     if (S.meds.length) html += `<div class="med"><select class="n" id="sel_${sl.id}"><option value="">${t('selectMed')}</option>${S.meds.map(m => `<option value="${m.id}">${h(m.name)}</option>`).join('')}</select>
@@ -488,11 +558,15 @@ function viewStock() {
     const need = dailyNeed(m.id), thr = threshold(m.id), st = num(m.stock);
     const badge = need <= 0 ? `<span class="badge b-mut">${t('notInTherapy')}</span>` : st < thr ? `<span class="badge b-bad">${t('short')} · ${t('missing')} ${fmtN(thr - st)}</span>` : `<span class="badge b-ok">${t('ok')}</span>`;
     html += `<div class="card"><div class="row between"><input class="grow" value="${h(m.name)}" aria-label="${h(t('rename'))}" onchange="A.medField('${m.id}','name',this.value)" style="font-weight:600">${badge}</div>
-      <div class="row muted" style="margin:6px 0">${t('inStock')}: <b style="color:var(--fg)">${fmtN(st)} ${h(m.unit)}</b> · ${t('perDay')}: ${fmtN(need)} (${adminsPerDay(m.id)} ${t('adminsDay')}) · ${t('threshold')}: ${fmtN(thr)}</div>
+      <div class="row muted" style="margin:6px 0">${t('inStock')}: <b style="color:var(--fg)">${fmtN(st)} ${h(m.unit)}</b> · ${t('perDay')}: ${fmtN(need)} (${adminsPerDay(m.id)} ${t('adminsDay')}, ${h(freqLabel(m).toLowerCase())}) · ${t('threshold')}: ${fmtN(thr)}</div>
       <div class="row"><input type="number" id="ld_${m.id}" min="0" placeholder="+" aria-label="${h(t('load'))}"><button onclick="A.loadStock('${m.id}')">${t('load')}: ${t('loadBtn')}</button>
       <span class="muted">${t('setStock')}</span><input type="number" value="${st}" onchange="A.medField('${m.id}','stock',this.value)">
       <input value="${h(m.unit)}" aria-label="${h(t('unit'))}" style="width:110px" onchange="A.medField('${m.id}','unit',this.value)">
       <button class="small danger" onclick="A.delMed('${m.id}')">🗑 ${t('deleteMed')}</button></div>
+      <div class="row" style="margin-top:8px"><label class="f" style="margin:0"><span>${t('freq')}</span><select onchange="A.setEvery('${m.id}',this.value)">
+        ${[[1, t('freqDaily')], [2, t('freqEvery', { n: 2 })], [3, t('freqEvery', { n: 3 })], [7, t('freqWeekly')], [14, t('freqEvery', { n: 14 })], [28, t('freqEvery', { n: 28 })], [30, t('freqEvery', { n: 30 })]].map(([n, l]) => `<option value="${n}" ${every(m) === n ? 'selected' : ''}>${h(l)}</option>`).join('')}
+        ${[1, 2, 3, 7, 14, 28, 30].includes(every(m)) ? '' : `<option selected>${h(freqLabel(m))}</option>`}<option value="other">${h(t('freqOther'))}</option></select></label>
+        ${every(m) > 1 ? `<label class="f" style="margin:0"><span>${t('freqFrom')}</span><input type="date" value="${h(m.from || '')}" onchange="A.medField('${m.id}','from',this.value)"></label>` : ''}</div>
       <div class="row" style="margin-top:8px"><label class="f" style="margin:0"><span>${t('medValue')}</span><input type="number" step="any" value="${h(m.value ?? '')}" onchange="A.medField('${m.id}','value',this.value)"></label>
       <label class="f grow" style="margin:0"><span>${t('medNotes')}</span><textarea style="min-height:44px" onchange="A.medField('${m.id}','notes',this.value)">${h(m.notes || '')}</textarea></label></div></div>`;
   });
@@ -516,7 +590,7 @@ function viewSupply() {
     <label class="f"><span>${t('prepDate')}</span><input type="date" value="${prepDateSel}" onchange="prepDateSel=this.value"></label>
     <h3>${t('preview')}</h3><table><tr><th></th><th class="num">${t('inStock')}</th><th class="num">${t('need')}</th><th class="num">${t('after')}</th></tr>`;
   S.meds.filter(m => dailyNeed(m.id) > 0).forEach(m => {
-    const need = days * dailyNeed(m.id), after = num(m.stock) - need;
+    const need = needFor(m.id, prepDateSel, days), after = num(m.stock) - need;
     html += `<tr><td>${h(m.name)}</td><td class="num">${fmtN(num(m.stock))}</td><td class="num">${fmtN(need)}</td><td class="num ${after < 0 ? 'neg' : ''}">${fmtN(after)}</td></tr>`;
   });
   html += `</table><div style="margin-top:10px"><button class="pri" onclick="A.prepare()">📦 ${t('prepare', { n: days })}</button></div></div>`;
@@ -565,6 +639,29 @@ function viewPatient() {
     <div class="card"><h2>📋 ${t('plans')}</h2>${docList('plan')}${docForm('plan')}</div>
     <div class="card"><h2>🩺 ${t('records')}</h2>${docList('record')}${docForm('record')}</div>`;
 }
+function licenseCard() {
+  const left = trialLeft();
+  const status = licensed ? `<p><span class="badge b-ok">✓ ${t('licActive')}</span> ${h(P.license.email)}</p>`
+    : left > 0 ? `<p>${t('licTrial', { n: left, tot: TRIAL_DAYS })}</p>` : `<p class="neg">${t('licExpired', { tot: TRIAL_DAYS })}</p>`;
+  if (licensed) return `<div class="card"><h2>🔑 ${t('licTitle')}</h2>${status}</div>`;
+  return `<div class="card"><h2>🔑 ${t('licTitle')}</h2>${status}<p class="muted">${t('licHow', { price: PRICE, email: SUPPORT_EMAIL })}</p>
+    <label class="f"><span>${t('licEmailLbl')}</span><input type="email" id="licEmail" value="${h(P.licEmail || '')}" autocomplete="email"></label>
+    <button onclick="A.requestCode()">✉️ ${t('licRequest')}</button>
+    <label class="f"><span>${t('licCodeLbl')}</span><textarea id="licCode" style="min-height:70px;font-family:monospace"></textarea></label>
+    <button class="pri" onclick="A.unlock()">🔓 ${t('licUnlock')}</button></div>`;
+}
+function viewHelp() {
+  const man = (I18N[P.lang] || I18N.it).manual || I18N.it.manual;
+  return `<div class="card"><h2>✉️ ${t('support')}</h2><p>${t('supportText')}</p><p><a class="btn" href="mailto:${SUPPORT_EMAIL}?subject=${encodeURIComponent(t('appTitle'))}">${SUPPORT_EMAIL}</a></p></div>
+    ${licenseCard()}
+    <div class="card"><h2>📖 ${t('manualTitle')}</h2>${man.map(([ti, tx]) => `<h3 style="margin-top:12px">${h(ti)}</h3><p style="margin:0;white-space:pre-line">${h(tx)}</p>`).join('')}</div>
+    <p class="muted" style="text-align:center">${t('appTitle')} · By Antonio Chitano</p>`;
+}
+function viewLocked() {
+  return `<div class="card"><h2>⏳ ${t('licLockedTitle')}</h2><p>${t('licLockedText', { tot: TRIAL_DAYS, price: PRICE })}</p></div>${licenseCard()}
+    <div class="card"><h2>${t('backup')}</h2><p class="muted">${t('licBackupText')}</p><button onclick="A.exportJson()">⬇ ${t('exportJson')}</button></div>
+    <div class="card"><h2>✉️ ${t('support')}</h2><a class="btn" href="mailto:${SUPPORT_EMAIL}">${SUPPORT_EMAIL}</a></div>`;
+}
 function viewSettings() {
   const s = S.settings, inp = (f, type = 'text', extra = '') => `<input type="${type}" value="${h(s[f])}" ${extra} onchange="A.set('${f}',this.value)">`;
   const pats = P.list.map(p => `<div class="med"><div class="n">${p.id === P.current ? '● ' : ''}<b>${h(p.name)}</b></div>
@@ -591,18 +688,25 @@ function renderBanner() {
       out.push(`<div class="${k ? 'b-warn' : 'b-info'}">${k ? '⚠ ' : ''}${t(k ? 'alertBanner' : 'alertBannerOk', { n: ci.left, k })}<button class="small" onclick="A.tab('supply');setTimeout(()=>document.getElementById('short').scrollIntoView(),50)">${t('open')}</button></div>`);
     }
   }
+  if (licChecked && !licensed && trialLeft() <= 10) out.push(`<div class="b-warn">⏳ ${t('licEnding', { n: trialLeft() })}<button class="small" onclick="A.tab('help')">${t('open')}</button></div>`);
   expiringPlans().forEach(d => out.push(`<div class="b-warn">⚠ ${h(t('planBanner', { t: d.title, d: fmtDate(d.expiry) }))}<button class="small" onclick="A.tab('patient')">${t('open')}</button></div>`));
   document.getElementById('banner').innerHTML = out.join('<div style="height:6px;padding:0"></div>');
 }
-const TABS = [['today', '📅', 'tabToday'], ['therapy', '💊', 'tabTherapy'], ['stock', '📦', 'tabStock'], ['supply', '🚚', 'tabSupply'], ['patient', '👤', 'tabPatient'], ['settings', '⚙️', 'tabSettings']];
+const TABS = [['today', '📅', 'tabToday'], ['therapy', '💊', 'tabTherapy'], ['stock', '📦', 'tabStock'], ['supply', '🚚', 'tabSupply'], ['patient', '👤', 'tabPatient'], ['settings', '⚙️', 'tabSettings'], ['help', '❓', 'tabHelp']];
 function render() {
   document.documentElement.lang = P.lang;
   document.title = t('appTitle');
   document.getElementById('title').textContent = t('appTitle');
   document.getElementById('patSel').innerHTML = P.list.map(p => `<option value="${p.id}" ${p.id === P.current ? 'selected' : ''}>👤 ${h(p.name)}</option>`).join('') + `<option value="__new">+ ${h(t('addPatient'))}</option>`;
-  document.getElementById('tabs').innerHTML = TABS.map(([k, i, l]) => `<button class="${tab === k ? 'on' : ''}" onclick="A.tab('${k}')"><span class="i">${i}</span>${t(l)}</button>`).join('');
-  renderBanner();
-  document.getElementById('view').innerHTML = { today: viewToday, therapy: viewTherapy, stock: viewStock, supply: viewSupply, patient: viewPatient, settings: viewSettings }[tab]();
+  if (locked()) {
+    document.getElementById('tabs').innerHTML = '';
+    document.getElementById('banner').innerHTML = '';
+    document.getElementById('view').innerHTML = viewLocked();
+  } else {
+    document.getElementById('tabs').innerHTML = TABS.map(([k, i, l]) => `<button class="${tab === k ? 'on' : ''}" onclick="A.tab('${k}')"><span class="i">${i}</span><span class="l">${t(l)}</span></button>`).join('');
+    renderBanner();
+    document.getElementById('view').innerHTML = { today: viewToday, therapy: viewTherapy, stock: viewStock, supply: viewSupply, patient: viewPatient, settings: viewSettings, help: viewHelp }[tab]();
+  }
   const ib = document.getElementById('installBtn'); ib.textContent = t('install'); ib.hidden = !deferredPrompt;
 }
 
@@ -615,6 +719,7 @@ if ('serviceWorker' in navigator && location.protocol.startsWith('http')) naviga
 if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
 
 load(); render();
+(P.license ? verifyLicense(P.license.email, P.license.code) : Promise.resolve(false)).then(ok => { licensed = ok; licChecked = true; render(); });
 // aggiorna banner e "oggi" al cambio di giorno
 let lastDay = todayStr();
 setInterval(() => { if (todayStr() !== lastDay) { if (viewDate === lastDay) viewDate = todayStr(); lastDay = todayStr(); render(); } }, 60000);
