@@ -419,7 +419,7 @@ const A = {
   async exportJson() {
     const files = {};
     for (const d of S.docs) if (d.fileName) { const b = await IDB.get(d.id).catch(() => null); if (b) files[d.id] = await blobToDataURL(b); }
-    download(`diario-terapia-backup-${todayStr()}.json`, JSON.stringify({ ...S, files }), 'application/json');
+    download(`diario-terapia-backup-${todayStr()}.json`, JSON.stringify({ ...S, trialStart: P.firstUse, license: licensed ? P.license : undefined, files }), 'application/json');
   },
   importJson() { document.getElementById('fileIn').click(); },
   exportData(kind, fmt) {
@@ -454,10 +454,16 @@ const A = {
 };
 document.getElementById('fileIn').addEventListener('change', e => {
   const f = e.target.files[0]; if (!f) return;
-  f.text().then(txt => {
+  f.text().then(async txt => {
     let d;
     try { d = JSON.parse(txt.replace(/^\ufeff/, '')); if (!d.meds || !d.slots) throw 0; } catch (err) { alert(t('importErr')); return; }
     const files = d.files || {}; delete d.files;
+    // il backup porta con sé l'inizio della prova: importarlo dopo aver cancellato i dati non fa ripartire i 100 giorni
+    const dates = d.trialStart ? [d.trialStart] : [...(d.cycles || []).map(c => c.prepDate), ...Object.keys(d.log || {}).map(k => k.split('|')[0])];
+    const start = dates.filter(x => /^\d{4}-\d{2}-\d{2}$/.test(x)).sort()[0];
+    if (start && start < P.firstUse) { P.firstUse = start; saveProfiles(); }
+    const lic = d.license; delete d.trialStart; delete d.license;
+    if (!licensed && lic && await verifyLicense(lic.email, lic.code)) { P.license = lic; saveProfiles(); licensed = true; }
     // i documenti ricevono id nuovi così un backup importato due volte non sovrascrive gli allegati dell'altro paziente
     const remap = {};
     (d.docs || []).forEach(x => { remap[x.id] = uid(); x.id = remap[x.id]; });
