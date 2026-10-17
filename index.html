@@ -352,6 +352,26 @@ const A = {
     download(`diario-terapia-backup-${todayStr()}.json`, JSON.stringify({ ...S, files }), 'application/json');
   },
   importJson() { document.getElementById('fileIn').click(); },
+  exportData(kind, fmt) {
+    const { title, head, rows, info } = exportTables[kind]();
+    const pat = S.settings.patientName || '';
+    let out;
+    if (fmt === 'csv') {
+      // separatore ";" così Excel in italiano apre le colonne correttamente
+      // numeri con la virgola decimale dove il foglio di calcolo se lo aspetta (it, fr, es)
+      const dec = ['it', 'fr', 'es'].includes(P.lang);
+      const cell = v => { v = String(v ?? ''); if (dec && /^-?\d+\.\d+$/.test(v)) v = v.replace('.', ','); return /[";\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; };
+      const line = r => r.map(cell).join(';');
+      out = [...info.map(line), ...(info.length ? [''] : []), line(head), ...rows.map(line)].join('\r\n');
+    } else {
+      const w = head.map((x, i) => Math.max(String(x).length, ...rows.map(r => String(r[i] ?? '').length)));
+      const line = r => r.map((v, i) => String(v ?? '').padEnd(w[i])).join('  ').trimEnd();
+      out = [`${title}${pat ? ' - ' + pat : ''}`, fmtDate(todayStr()), '', ...info.map(r => r.join(': ')), ...(info.length ? [''] : []),
+        line(head), w.map(n => '-'.repeat(n)).join('  '), ...rows.map(line)].join('\n');
+    }
+    const slug = (title + (pat ? '-' + pat : '')).toLowerCase().normalize('NFD').replace(/[^a-z0-9\u4e00-\u9fff]+/g, '-').replace(/^-|-$/g, '');
+    download(`${slug}-${todayStr()}.${fmt}`, out, fmt === 'csv' ? 'text/csv;charset=utf-8' : 'text/plain;charset=utf-8');
+  },
   exportDiary() {
     const rows = Object.entries(S.log).map(([k, v]) => ({ d: k.split('|')[0], ...v })).sort((a, b) => (a.d + a.slotTime).localeCompare(b.d + b.slotTime));
     let out = `${t('diaryTitle')}${S.settings.patientName ? ' - ' + S.settings.patientName : ''}\n`, last = '';
@@ -405,6 +425,39 @@ function viewToday() {
   });
   return html;
 }
+const exportTables = {
+  stock: () => ({
+    title: t('stock'), info: [],
+    head: [t('name'), t('unit'), t('inStock'), t('perDay'), t('colAdmins'), t('threshold'), t('status'), t('colMissing'), t('medValue'), t('medNotes')],
+    rows: S.meds.map(m => {
+      const need = dailyNeed(m.id), thr = threshold(m.id), st = num(m.stock);
+      return [m.name, m.unit, fmtN(st), fmtN(need), adminsPerDay(m.id), fmtN(thr), need <= 0 ? t('notInTherapy') : st < thr ? t('short') : t('ok'), need > 0 && st < thr ? fmtN(thr - st) : '', m.value ?? '', (m.notes || '').replace(/\n/g, ' ')];
+    }),
+  }),
+  therapy: () => ({
+    title: t('tabTherapy'), info: [],
+    head: [t('time'), t('colSlotNote'), t('name'), t('qty'), t('unit')],
+    rows: slotsSorted().flatMap(sl => {
+      const es = S.schedule.filter(e => e.slotId === sl.id && medById(e.medId));
+      return es.length ? es.map(e => [sl.time, sl.label, medById(e.medId).name, fmtN(num(e.qty)), medById(e.medId).unit]) : [[sl.time, sl.label, '', '', '']];
+    }),
+  }),
+  supply: () => {
+    const days = num(S.settings.cycleDays), ci = cycleInfo(), sh = shortages();
+    const info = [[t('containers'), days], [t('alertDays'), S.settings.alertDays]];
+    if (ci) info.push([t('prepDate'), fmtDate(ci.c.prepDate)], [t('cyclePrepared'), ci.c.days], [t('startUse'), fmtDate(ci.start)], [t('endCycle'), fmtDate(ci.end)], [t('alertOn'), fmtDate(ci.alert)]);
+    info.push([t('shortList'), sh.length ? sh.map(x => x.m.name).join(', ') : t('noShort')]);
+    return {
+      title: t('tabSupply'), info,
+      head: [t('name'), t('unit'), t('inStock'), t('need'), t('after'), t('status'), t('colMissing')],
+      rows: S.meds.filter(m => dailyNeed(m.id) > 0).map(m => {
+        const need = days * dailyNeed(m.id), st = num(m.stock);
+        return [m.name, m.unit, fmtN(st), fmtN(need), fmtN(st - need), st < need ? t('short') : t('ok'), st < need ? fmtN(need - st) : ''];
+      }),
+    };
+  },
+};
+const exportBtns = kind => `<div class="card"><div class="row"><b class="grow">${t('exportData')}</b><button onclick="A.exportData('${kind}','txt')">⬇ TXT</button><button onclick="A.exportData('${kind}','csv')">⬇ CSV</button></div></div>`;
 function viewTherapy() {
   let html = `<div class="card"><div class="row between"><h2>${t('slots')}</h2><button class="pri" onclick="A.addSlot()">+ ${t('addSlot')}</button></div>`;
   if (!S.meds.length) html += `<div class="muted">${t('noMedsYet')}</div>`;
@@ -422,7 +475,7 @@ function viewTherapy() {
       <input type="number" id="qty_${sl.id}" min="0" step="0.25" value="1" aria-label="${h(t('qty'))}"><button onclick="A.addEntry('${sl.id}')">+ ${t('addToSlot')}</button></div>`;
     html += `</div>`;
   });
-  return html;
+  return html + exportBtns('therapy');
 }
 function viewStock() {
   let html = `<div class="card"><h2>${t('addMed')}</h2><div class="row">
@@ -443,7 +496,7 @@ function viewStock() {
       <div class="row" style="margin-top:8px"><label class="f" style="margin:0"><span>${t('medValue')}</span><input type="number" step="any" value="${h(m.value ?? '')}" onchange="A.medField('${m.id}','value',this.value)"></label>
       <label class="f grow" style="margin:0"><span>${t('medNotes')}</span><textarea style="min-height:44px" onchange="A.medField('${m.id}','notes',this.value)">${h(m.notes || '')}</textarea></label></div></div>`;
   });
-  return html;
+  return html + exportBtns('stock');
 }
 function viewSupply() {
   const days = num(S.settings.cycleDays), ci = cycleInfo();
@@ -475,7 +528,7 @@ function viewSupply() {
     <div class="row"><button class="okb" onclick="A.sendWa()">💬 ${t('sendWa')}</button><button onclick="A.exportShort()">⬇ ${t('exportTxt')}</button><button onclick="A.copyMsg(this)">${t('copy')}</button></div></div>`;
   const prev = S.cycles.slice(0, -1).reverse();
   html += `<div class="card"><h2>${t('history')}</h2>${prev.length ? prev.map(c => `<div>${fmtDate(c.prepDate)} → ${fmtDate(addDays(c.prepDate, c.days))}</div>`).join('') : `<span class="muted">${t('none')}</span>`}</div>`;
-  return html;
+  return html + exportBtns('supply');
 }
 function daysTo(s) { return s ? diffDays(s, todayStr()) : null; }
 function expiringPlans() { return S.docs.filter(d => d.kind === 'plan' && d.expiry && daysTo(d.expiry) <= 30); }

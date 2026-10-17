@@ -4,6 +4,8 @@ window.LOCALES = { it: 'it-IT', en: 'en-GB', fr: 'fr-FR', es: 'es-ES', zh: 'zh-C
 
 window.I18N = {
   it: {
+    colAdmins: 'Somministrazioni/giorno', colMissing: 'Mancanti', colSlotNote: 'Nota fascia',
+    time: 'Orario', status: 'Stato', exportData: 'Esporta questi dati',
     medValue: 'Valore (libero)', medNotes: 'Note',
     patients: 'Pazienti', addPatient: 'Nuovo paziente', newPatientName: 'Nome del nuovo paziente', patientDefault: 'Paziente {n}', deletePatient: 'Elimina', deletePatientConfirm: 'Eliminare il paziente {name} con tutti i suoi dati (terapia, magazzino, diario, documenti)?', cantDeleteLast: 'Deve restare almeno un paziente.', patientsHelp: 'Ogni paziente ha i suoi dati separati: terapia, magazzino, cicli, diario e documenti. Si cambia paziente dal menu in alto.', backupHelp: 'Il backup esporta il paziente attivo. Importando un backup si crea un nuovo paziente.',
     containers: 'Numero di contenitori (giorni)', containersHelp: 'Cambiando il numero si ricalcolano soglie di carenza, quantità da preparare e data della segnalazione.', cyclePrepared: 'Contenitori preparati', resizeConfirm: 'Portare il ciclo in corso a {n} contenitori? Il magazzino viene ricalcolato.',
@@ -61,6 +63,8 @@ window.I18N = {
     lineFmt: '- {name}: {miss} {u} (in magazzino {stock}, servono {thr} per {n} giorni)',
   },
   en: {
+    colAdmins: 'Doses/day', colMissing: 'Missing', colSlotNote: 'Slot note',
+    time: 'Time', status: 'Status', exportData: 'Export this data',
     medValue: 'Value (free)', medNotes: 'Notes',
     patients: 'Patients', addPatient: 'New patient', newPatientName: 'Name of the new patient', patientDefault: 'Patient {n}', deletePatient: 'Delete', deletePatientConfirm: 'Delete patient {name} and all their data (therapy, stock, diary, documents)?', cantDeleteLast: 'At least one patient must remain.', patientsHelp: 'Each patient has separate data: therapy, stock, cycles, diary and documents. Switch patient from the menu at the top.', backupHelp: 'The backup exports the active patient. Importing a backup creates a new patient.',
     containers: 'Number of containers (days)', containersHelp: 'Changing the number recalculates shortage thresholds, quantities to prepare and the alert date.', cyclePrepared: 'Containers prepared', resizeConfirm: 'Change the current cycle to {n} containers? Stock will be recalculated.',
@@ -118,6 +122,8 @@ window.I18N = {
     lineFmt: '- {name}: {miss} {u} (in stock {stock}, {thr} needed for {n} days)',
   },
   fr: {
+    colAdmins: 'Prises/jour', colMissing: 'Manquants', colSlotNote: 'Note tranche',
+    time: 'Heure', status: 'État', exportData: 'Exporter ces données',
     medValue: 'Valeur (libre)', medNotes: 'Notes',
     patients: 'Patients', addPatient: 'Nouveau patient', newPatientName: 'Nom du nouveau patient', patientDefault: 'Patient {n}', deletePatient: 'Supprimer', deletePatientConfirm: 'Supprimer le patient {name} et toutes ses données (traitement, stock, journal, documents) ?', cantDeleteLast: 'Il doit rester au moins un patient.', patientsHelp: 'Chaque patient a ses propres données : traitement, stock, cycles, journal et documents. Changez de patient avec le menu en haut.', backupHelp: 'La sauvegarde exporte le patient actif. Importer une sauvegarde crée un nouveau patient.',
     containers: 'Nombre de boîtes (jours)', containersHelp: 'Changer ce nombre recalcule les seuils de manque, les quantités à préparer et la date d’alerte.', cyclePrepared: 'Boîtes préparées', resizeConfirm: 'Passer le cycle en cours à {n} boîtes ? Le stock sera recalculé.',
@@ -175,6 +181,8 @@ window.I18N = {
     lineFmt: '- {name} : {miss} {u} (en stock {stock}, {thr} nécessaires pour {n} jours)',
   },
   es: {
+    colAdmins: 'Tomas/día', colMissing: 'Faltan', colSlotNote: 'Nota franja',
+    time: 'Hora', status: 'Estado', exportData: 'Exportar estos datos',
     medValue: 'Valor (libre)', medNotes: 'Notas',
     patients: 'Pacientes', addPatient: 'Nuevo paciente', newPatientName: 'Nombre del nuevo paciente', patientDefault: 'Paciente {n}', deletePatient: 'Eliminar', deletePatientConfirm: '¿Eliminar al paciente {name} y todos sus datos (terapia, almacén, diario, documentos)?', cantDeleteLast: 'Debe quedar al menos un paciente.', patientsHelp: 'Cada paciente tiene sus propios datos: terapia, almacén, ciclos, diario y documentos. Cambia de paciente desde el menú de arriba.', backupHelp: 'La copia exporta el paciente activo. Al importar una copia se crea un nuevo paciente.',
     containers: 'Número de contenedores (días)', containersHelp: 'Al cambiar el número se recalculan los umbrales de escasez, las cantidades a preparar y la fecha del aviso.', cyclePrepared: 'Contenedores preparados', resizeConfirm: '¿Cambiar el ciclo en curso a {n} contenedores? Se recalculará el almacén.',
@@ -232,6 +240,8 @@ window.I18N = {
     lineFmt: '- {name}: {miss} {u} (en almacén {stock}, se necesitan {thr} para {n} días)',
   },
   zh: {
+    colAdmins: '每天次数', colMissing: '缺少', colSlotNote: '时段备注',
+    time: '时间', status: '状态', exportData: '导出这些数据',
     medValue: '数值（自由填写）', medNotes: '备注',
     patients: '患者', addPatient: '新患者', newPatientName: '新患者姓名', patientDefault: '患者 {n}', deletePatient: '删除', deletePatientConfirm: '删除患者 {name} 及其所有数据（疗程、库存、日记、文件）？', cantDeleteLast: '至少需要保留一位患者。', patientsHelp: '每位患者的数据相互独立：疗程、库存、周期、日记和文件。可在顶部菜单切换患者。', backupHelp: '备份导出当前患者。导入备份会创建一位新患者。',
     containers: '药盒数量（天）', containersHelp: '更改数量会重新计算短缺阈值、准备数量和提醒日期。', cyclePrepared: '已准备药盒', resizeConfirm: '将当前周期改为 {n} 个药盒？库存将重新计算。',
