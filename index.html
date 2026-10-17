@@ -96,6 +96,28 @@ const nowHM = () => { const d = new Date(); return `${pad(d.getHours())}:${pad(d
 const h = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const num = v => { const n = parseFloat(String(v).replace(',', '.')); return isFinite(n) ? n : 0; };
 const fmtN = n => String(Math.round(n * 100) / 100);
+// Singolare/plurale dell'unità: "1 compressa", "2 compresse". Vale per le unità più comuni in tutte le lingue.
+const UNIT_FORMS = {
+  it: [['compressa','compresse'],['iniezione','iniezioni'],['bustina','bustine'],['capsula','capsule'],['fiala','fiale'],['goccia','gocce'],
+    ['flacone','flaconi'],['cerotto','cerotti'],['supposta','supposte'],['pastiglia','pastiglie'],['confetto','confetti'],['siringa','siringhe'],
+    ['penna','penne'],['dose','dosi'],['spruzzo','spruzzi'],['inalazione','inalazioni'],['misurino','misurini'],['cucchiaio','cucchiai'],
+    ['cucchiaino','cucchiaini'],['scatola','scatole'],['confezione','confezioni'],['giorno','giorni']],
+  en: [['tablet','tablets'],['injection','injections'],['sachet','sachets'],['capsule','capsules'],['vial','vials'],['drop','drops'],['patch','patches'],
+    ['pill','pills'],['suppository','suppositories'],['syringe','syringes'],['pen','pens'],['spray','sprays'],['spoon','spoons'],['box','boxes'],['dose','doses'],['day','days']],
+  fr: [['comprimé','comprimés'],['injection','injections'],['sachet','sachets'],['gélule','gélules'],['ampoule','ampoules'],['goutte','gouttes'],
+    ['seringue','seringues'],['suppositoire','suppositoires'],['capsule','capsules'],['dose','doses'],['jour','jours']],
+  es: [['comprimido','comprimidos'],['inyección','inyecciones'],['sobre','sobres'],['cápsula','cápsulas'],['ampolla','ampollas'],['gota','gotas'],
+    ['parche','parches'],['jeringa','jeringas'],['supositorio','supositorios'],['pastilla','pastillas'],['dosis','dosis'],['día','días']],
+};
+function unitFor(unit, qty) {
+  const u = String(unit ?? ''); const m = u.match(/^(\s*)([^\s\d.,;:()]+)(.*)$/s); if (!m) return u;
+  const w = m[2].toLowerCase(); const one = Number(qty) > 0 && Number(qty) <= 1;
+  const langs = [P && P.lang, 'it', 'en', 'fr', 'es'].filter(l => UNIT_FORMS[l]);
+  let pair; for (const l of langs) { pair = UNIT_FORMS[l].find(f => f[0] === w || f[1] === w); if (pair) break; } if (!pair) return u;
+  let r = one ? pair[0] : pair[1];
+  if (m[2][0] !== m[2][0].toLowerCase()) r = r[0].toUpperCase() + r.slice(1);
+  return m[1] + r + m[3];
+}
 
 
 function defaultState() {
@@ -476,7 +498,7 @@ const A = {
     let out = `${t('diaryTitle')}${S.settings.patientName ? ' - ' + S.settings.patientName : ''}\n`, last = '';
     rows.forEach(r => {
       if (r.d !== last) { out += `\n${fmtDate(r.d)}\n`; last = r.d; }
-      out += `  ${r.slotTime}  ${r.status === 'given' ? '✓ ' + t('given') + ' ' + r.time : '✗ ' + t('skippedLbl')}  ${r.medName} ${fmtN(num(r.qty))} ${r.unit}\n`;
+      out += `  ${r.slotTime}  ${r.status === 'given' ? '✓ ' + t('given') + ' ' + r.time : '✗ ' + t('skippedLbl')}  ${r.medName} ${fmtN(num(r.qty))} ${unitFor(r.unit, num(r.qty))}\n`;
     });
     download(`diario-terapia-${todayStr()}.txt`, out);
   },
@@ -520,7 +542,7 @@ function viewToday() {
     if (!entries.length) html += `<div class="muted">${t('emptySlot')}</div>`;
     entries.forEach(e => {
       const m = medById(e.medId), L = S.log[`${viewDate}|${sl.id}|${m.id}`];
-      html += `<div class="med ${L ? L.status : ''}"><div class="n"><b>${h(m.name)}</b> <span class="muted">${fmtN(num(e.qty))} ${h(m.unit)}</span>${every(m) > 1 ? ` <span class="badge b-mut">${h(freqLabel(m))}</span>` : ''}</div>`;
+      html += `<div class="med ${L ? L.status : ''}"><div class="n"><b>${h(m.name)}</b> <span class="muted">${fmtN(num(e.qty))} ${h(unitFor(m.unit, num(e.qty)))}</span>${every(m) > 1 ? ` <span class="badge b-mut">${h(freqLabel(m))}</span>` : ''}</div>`;
       if (!L) html += `<button class="okb" onclick="A.mark('${sl.id}','${m.id}','given')">✓ ${t('give')}</button><button onclick="A.mark('${sl.id}','${m.id}','skipped')">✗ ${t('skip')}</button>`;
       else if (L.status === 'given') html += `<span class="muted">${t('given')}</span><input type="time" value="${h(L.time)}" onchange="A.setTime('${sl.id}','${m.id}',this.value)"><button class="small" onclick="A.mark('${sl.id}','${m.id}')">${t('undo')}</button>`;
       else html += `<span class="muted">${t('skippedLbl')}</span><button class="small" onclick="A.mark('${sl.id}','${m.id}')">${t('undo')}</button>`;
@@ -573,7 +595,7 @@ function viewTherapy() {
       <button class="small danger" title="${h(t('removeSlot'))}" onclick="A.delSlot('${sl.id}')">🗑</button></div>`;
     S.schedule.filter(e => e.slotId === sl.id && medById(e.medId)).forEach(e => {
       const m = medById(e.medId);
-      html += `<div class="med"><div class="n">${h(m.name)} <span class="muted" style="font-size:13px">${h(freqLabel(m))}</span></div><input type="number" min="0" step="0.25" value="${e.qty}" onchange="A.entryQty('${e.id}',this.value)"> <span class="muted">${h(m.unit)}</span>
+      html += `<div class="med"><div class="n">${h(m.name)} <span class="muted" style="font-size:13px">${h(freqLabel(m))}</span></div><input type="number" min="0" step="0.25" value="${e.qty}" onchange="A.entryQty('${e.id}',this.value)"> <span class="muted">${h(unitFor(m.unit, num(e.qty)))}</span>
         <button class="small danger" onclick="A.delEntry('${e.id}')">✕</button></div>`;
     });
     if (S.meds.length) html += `<div class="med"><select class="n" id="sel_${sl.id}"><option value="">${t('selectMed')}</option>${S.meds.map(m => `<option value="${m.id}">${h(m.name)}</option>`).join('')}</select>
@@ -593,7 +615,7 @@ function viewStock() {
     const need = dailyNeed(m.id), thr = threshold(m.id), st = num(m.stock);
     const badge = need <= 0 ? `<span class="badge b-mut">${t('notInTherapy')}</span>` : st < thr ? `<span class="badge b-bad">${t('short')} · ${t('missing')} ${fmtN(thr - st)}</span>` : `<span class="badge b-ok">${t('ok')}</span>`;
     html += `<div class="card"><div class="row between"><input class="grow" value="${h(m.name)}" aria-label="${h(t('rename'))}" onchange="A.medField('${m.id}','name',this.value)" style="font-weight:600">${badge}</div>
-      <div class="row muted" style="margin:6px 0">${t('inStock')}: <b style="color:var(--fg)">${fmtN(st)} ${h(m.unit)}</b> · ${t('perDay')}: ${fmtN(need)} (${adminsPerDay(m.id)} ${t('adminsDay')}, ${h(freqLabel(m).toLowerCase())}) · ${t('threshold')}: ${fmtN(thr)}</div>
+      <div class="row muted" style="margin:6px 0">${t('inStock')}: <b style="color:var(--fg)">${fmtN(st)} ${h(unitFor(m.unit, st))}</b> · ${t('perDay')}: ${fmtN(need)} (${adminsPerDay(m.id)} ${t('adminsDay')}, ${h(freqLabel(m).toLowerCase())}) · ${t('threshold')}: ${fmtN(thr)}</div>
       <div class="row"><input type="number" id="ld_${m.id}" min="0" placeholder="+" aria-label="${h(t('load'))}"><button onclick="A.loadStock('${m.id}')">${t('load')}: ${t('loadBtn')}</button>
       <span class="muted">${t('setStock')}</span><input type="number" value="${st}" onchange="A.medField('${m.id}','stock',this.value)">
       <input value="${h(m.unit)}" aria-label="${h(t('unit'))}" style="width:110px" onchange="A.medField('${m.id}','unit',this.value)">
@@ -619,7 +641,7 @@ function viewSupply() {
     <tr><td>${t('startUse')}</td><td>${fmtDate(ci.start)}</td></tr>
     <tr><td>${t('endCycle')}</td><td>${fmtDate(ci.end)}</td></tr>
     <tr><td>${t('alertOn')}</td><td>${fmtDate(ci.alert)}</td></tr></table>
-    ${ci.c.items.filter(i => i.short > 0).map(i => `<div class="neg" style="margin-top:6px">${h(i.name)}: ${h(t('missingForPrep', { n: fmtN(i.short), u: i.unit, d: Math.floor(i.taken / (i.need / ci.c.days)) }))}</div>`).join('')}
+    ${ci.c.items.filter(i => i.short > 0).map(i => `<div class="neg" style="margin-top:6px">${h(i.name)}: ${h(t(i.short <= 1 ? 'missingForPrep1' : 'missingForPrep', { n: fmtN(i.short), u: unitFor(i.unit, i.short), d: Math.floor(i.taken / (i.need / ci.c.days)), g: unitFor(t('daysWord'), Math.floor(i.taken / (i.need / ci.c.days))) }))}</div>`).join('')}
     <div style="margin-top:8px"><button class="danger" onclick="A.undoPrep()">${t('undoPrep')}</button></div>`;
   html += `</div><div class="card"><h2>${t('prepare', { n: days })}</h2>
     <label class="f"><span>${t('prepDate')}</span><input type="date" value="${prepDateSel}" onchange="prepDateSel=this.value"></label>
@@ -631,7 +653,7 @@ function viewSupply() {
   html += `</table><div style="margin-top:10px"><button class="pri" onclick="A.prepare()">📦 ${t('prepare', { n: days })}</button></div></div>`;
   const sh = shortages();
   html += `<div class="card" id="short"><h2>${t('shortList')} (${sh.length})</h2><p class="muted">${t('shortHelp', { n: days, m: days * 2 })}</p>`;
-  html += sh.length ? `<table><tr><th></th><th class="num">${t('inStock')}</th><th class="num">${t('threshold')}</th><th class="num">${t('missing')}</th></tr>${sh.map(s => `<tr><td>${h(s.m.name)}</td><td class="num">${fmtN(s.stock)}</td><td class="num">${fmtN(s.thr)}</td><td class="num neg">${fmtN(s.miss)} ${h(s.m.unit)}</td></tr>`).join('')}</table>` : `<div class="muted">${t('noShort')}</div>`;
+  html += sh.length ? `<table><tr><th></th><th class="num">${t('inStock')}</th><th class="num">${t('threshold')}</th><th class="num">${t('missing')}</th></tr>${sh.map(s => `<tr><td>${h(s.m.name)}</td><td class="num">${fmtN(s.stock)}</td><td class="num">${fmtN(s.thr)}</td><td class="num neg">${fmtN(s.miss)} ${h(unitFor(s.m.unit, s.miss))}</td></tr>`).join('')}</table>` : `<div class="muted">${t('noShort')}</div>`;
   html += `<h3 style="margin-top:12px">${t('message')}</h3><pre>${h(shortMessage())}</pre>
     ${S.settings.waNumber ? '' : `<p class="muted">${t('waNoNumber')}</p>`}
     <div class="row"><button class="okb" onclick="A.sendWa()">💬 ${t('sendWa')}</button><button onclick="A.exportShort()">⬇ ${t('exportTxt')}</button><button onclick="A.copyMsg(this)">${t('copy')}</button></div></div>`;
