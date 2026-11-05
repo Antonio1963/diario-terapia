@@ -95,7 +95,7 @@ const todayStr = () => ymd(new Date());
 const nowHM = () => { const d = new Date(); return `${pad(d.getHours())}:${pad(d.getMinutes())}`; };
 const h = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const num = v => { const n = parseFloat(String(v).replace(',', '.')); return isFinite(n) ? n : 0; };
-const APP_VERSION = '1.4'; // aumentare di 0.1 a ogni rilascio (1.1, 1.2…) insieme a VERSION in sw.js
+const APP_VERSION = '1.5'; // aumentare di 0.1 a ogni rilascio (1.1, 1.2…) insieme a VERSION in sw.js
 const fmtN = n => String(Math.round(n * 100) / 100);
 // Singolare/plurale dell'unità: "1 compressa", "2 compresse". Vale per le unità più comuni in tutte le lingue.
 const UNIT_FORMS = {
@@ -660,10 +660,10 @@ function viewSupply() {
     <div style="margin-top:8px"><button class="danger" onclick="A.undoPrep()">${t('undoPrep')}</button></div>`;
   html += `</div><div class="card"><h2>${t('prepare', { n: days })}</h2>
     <label class="f"><span>${t('prepDate')}</span><input type="date" value="${prepDateSel}" onchange="prepDateSel=this.value"></label>
-    <h3>${t('preview')}</h3><div style="overflow-x:auto"><table><tr><th></th><th class="num">${t('inStock')}</th><th class="num">${t('need')}</th><th class="num">${t('bk')}</th><th class="num">${t('after')}</th></tr>`;
+    <h3>${t('preview')}</h3><div style="overflow-x:auto"><table style="font-size:14px"><tr><th class="num">${t('inStock')}</th><th class="num">${t('need')}</th><th class="num">${t('bk').replace('_','_<wbr>')}</th><th class="num">${t('after')}</th></tr>`;
   S.meds.filter(m => dailyNeed(m.id) > 0).forEach(m => {
     const need = needFor(m.id, prepDateSel, days), bk = num(bkSel[m.id]), after = num(m.stock) - need - bk;
-    html += `<tr><td>${h(m.name)}</td><td class="num">${fmtN(num(m.stock))}</td><td class="num">${fmtN(need)}</td><td class="num"><input type="number" min="0" step="1" value="${bk || ''}" placeholder="0" style="width:56px" aria-label="${h(t('bk'))}" onchange="bkSel['${m.id}']=Math.max(0,num(this.value));render()"></td><td class="num ${after < 0 ? 'neg' : ''}">${fmtN(after)}</td></tr>`;
+    html += `<tr><td colspan="4" style="border-bottom:0;padding-bottom:0;font-weight:600">${h(m.name)}</td></tr><tr><td class="num">${fmtN(num(m.stock))}</td><td class="num">${fmtN(need)}</td><td class="num"><div style="font-weight:600">${fmtN(num(m.bk))}</div><div style="white-space:nowrap">+ <input type="number" min="0" step="1" value="${bk || ''}" placeholder="0" style="width:48px;padding:4px 6px" aria-label="${h(t('bk'))}" onchange="bkSel['${m.id}']=Math.max(0,num(this.value));render()"></div></td><td class="num ${after < 0 ? 'neg' : ''}">${fmtN(after)}</td></tr>`;
   });
   html += `</table></div><p class="muted" style="margin-top:6px">${t('bkPrepHelp')}</p><div style="margin-top:10px"><button class="pri" onclick="A.prepare()">📦 ${t('prepare', { n: days })}</button></div></div>`;
   const sh = shortages();
