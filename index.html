@@ -95,7 +95,7 @@ const todayStr = () => ymd(new Date());
 const nowHM = () => { const d = new Date(); return `${pad(d.getHours())}:${pad(d.getMinutes())}`; };
 const h = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const num = v => { const n = parseFloat(String(v).replace(',', '.')); return isFinite(n) ? n : 0; };
-const APP_VERSION = '1.2'; // aumentare di 0.1 a ogni rilascio (1.1, 1.2…) insieme a VERSION in sw.js
+const APP_VERSION = '1.3'; // aumentare di 0.1 a ogni rilascio (1.1, 1.2…) insieme a VERSION in sw.js
 const fmtN = n => String(Math.round(n * 100) / 100);
 // Singolare/plurale dell'unità: "1 compressa", "2 compresse". Vale per le unità più comuni in tutte le lingue.
 const UNIT_FORMS = {
@@ -357,7 +357,8 @@ const A = {
     save(); render();
   },
   bkBack(id) { const m = medById(id); m.stock = Math.round((num(m.stock) + num(m.bk)) * 100) / 100; m.bk = 0; save(); render(); },
-  setBk(id, v) { const m = medById(id); m.bk = Math.max(0, num(v)); save(); render(); },
+  // sposta in BK_SEGRETO solo le unità indicate in questa operazione, togliendole dalle disponibili
+  addBk(id) { const m = medById(id), el = document.getElementById('bk_' + id), v = Math.min(Math.max(0, num(el.value)), num(m.stock)); if (!v) return; m.stock = Math.round((num(m.stock) - v) * 100) / 100; m.bk = Math.round((num(m.bk) + v) * 100) / 100; save(); render(); },
   loadStock(id) {
     const v = num(document.getElementById('ld_' + id).value);
     if (!v) return;
@@ -632,7 +633,7 @@ function viewStock() {
         ${[[1, t('freqDaily')], [2, t('freqEvery', { n: 2 })], [3, t('freqEvery', { n: 3 })], [7, t('freqWeekly')], [14, t('freqEvery', { n: 14 })], [28, t('freqEvery', { n: 28 })], [30, t('freqEvery', { n: 30 })]].map(([n, l]) => `<option value="${n}" ${every(m) === n ? 'selected' : ''}>${h(l)}</option>`).join('')}
         ${[1, 2, 3, 7, 14, 28, 30].includes(every(m)) ? '' : `<option selected>${h(freqLabel(m))}</option>`}<option value="other">${h(t('freqOther'))}</option></select></label>
         ${every(m) > 1 ? `<label class="f" style="margin:0"><span>${t('freqFrom')}</span><input type="date" value="${h(m.from || '')}" onchange="A.medField('${m.id}','from',this.value)"></label>` : ''}</div>
-      <div class="row" style="margin-top:8px"><label class="f" style="margin:0"><span>${t('bk')}</span><input type="number" min="0" value="${num(m.bk)}" title="${h(t('bkHelp'))}" onchange="A.setBk('${m.id}',this.value)"></label>${num(m.bk) > 0 ? `<button class="small" onclick="A.bkBack('${m.id}')">↩ ${t('bkBack')}</button>` : ''}<span class="muted" style="font-size:13px">${t('bkHelp')}</span></div>
+      <div class="row" style="margin-top:8px"><span>${t('bk')}: <b>${fmtN(num(m.bk))} ${h(unitFor(m.unit, num(m.bk)))}</b></span><input type="number" id="bk_${m.id}" min="0" placeholder="+" aria-label="${h(t('bkAdd'))}"><button class="small" onclick="A.addBk('${m.id}')">${t('bkAdd')}</button>${num(m.bk) > 0 ? `<button class="small" onclick="A.bkBack('${m.id}')">↩ ${t('bkBack')}</button>` : ''}<span class="muted" style="font-size:13px">${t('bkHelp')}</span></div>
       <div class="row" style="margin-top:8px"><label class="f" style="margin:0"><span>${t('medValue')}</span><input type="text" value="${h(m.value ?? '')}" onchange="A.medField('${m.id}','value',this.value)"></label>
       <label class="f grow" style="margin:0"><span>${t('medNotes')}</span><textarea style="min-height:44px" onchange="A.medField('${m.id}','notes',this.value)">${h(m.notes || '')}</textarea></label></div></div>`;
   });
