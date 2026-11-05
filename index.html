@@ -95,7 +95,7 @@ const todayStr = () => ymd(new Date());
 const nowHM = () => { const d = new Date(); return `${pad(d.getHours())}:${pad(d.getMinutes())}`; };
 const h = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const num = v => { const n = parseFloat(String(v).replace(',', '.')); return isFinite(n) ? n : 0; };
-const APP_VERSION = '1.1'; // aumentare di 0.1 a ogni rilascio (1.1, 1.2…) insieme a VERSION in sw.js
+const APP_VERSION = '1.2'; // aumentare di 0.1 a ogni rilascio (1.1, 1.2…) insieme a VERSION in sw.js
 const fmtN = n => String(Math.round(n * 100) / 100);
 // Singolare/plurale dell'unità: "1 compressa", "2 compresse". Vale per le unità più comuni in tutte le lingue.
 const UNIT_FORMS = {
@@ -307,7 +307,7 @@ function waUrl(text) {
 }
 
 // ---- azioni ----
-let tab = 'today', viewDate = todayStr(), prepDateSel = todayStr();
+let tab = 'today', viewDate = todayStr(), prepDateSel = todayStr(), bkSel = {};
 const A = {
   tab(x) { tab = x; render(); window.scrollTo(0, 0); },
   shiftDate(n) { viewDate = n === 0 ? todayStr() : addDays(viewDate, n); render(); },
@@ -356,6 +356,8 @@ const A = {
     if (m.every > 1 && !m.from) m.from = todayStr();
     save(); render();
   },
+  bkBack(id) { const m = medById(id); m.stock = Math.round((num(m.stock) + num(m.bk)) * 100) / 100; m.bk = 0; save(); render(); },
+  setBk(id, v) { const m = medById(id); m.bk = Math.max(0, num(v)); save(); render(); },
   loadStock(id) {
     const v = num(document.getElementById('ld_' + id).value);
     if (!v) return;
@@ -374,8 +376,12 @@ const A = {
       if (need <= 0) return;
       const taken = Math.min(num(m.stock), need);
       m.stock = Math.round((num(m.stock) - taken) * 100) / 100;
-      items.push({ medId: m.id, name: m.name, unit: m.unit, need, taken, short: need - taken });
+      // BK_SEGRETO: riserva scelta a ogni preparazione, tolta dalle disponibili
+      const bk = Math.max(0, Math.min(num(bkSel[m.id]), num(m.stock)));
+      if (bk) { m.stock = Math.round((num(m.stock) - bk) * 100) / 100; m.bk = Math.round((num(m.bk) + bk) * 100) / 100; }
+      items.push({ medId: m.id, name: m.name, unit: m.unit, need, taken, short: need - taken, bk });
     });
+    bkSel = {};
     S.cycles.push({ id: uid(), prepDate: prepDateSel, days, items });
     save(); render();
   },
@@ -393,7 +399,7 @@ const A = {
   undoPrep() {
     const c = S.cycles[S.cycles.length - 1];
     if (!c || !confirm(t('undoPrepConfirm', { d: fmtDate(c.prepDate) }))) return;
-    c.items.forEach(i => { const m = medById(i.medId); if (m) m.stock = num(m.stock) + i.taken; });
+    c.items.forEach(i => { const m = medById(i.medId); if (!m) return; const back = Math.min(num(i.bk), num(m.bk)); m.stock = num(m.stock) + i.taken + back; m.bk = num(m.bk) - back; });
     S.cycles.pop(); save(); render();
   },
   requestCode() {
@@ -557,10 +563,10 @@ function viewToday() {
 const exportTables = {
   stock: () => ({
     title: t('stock'), info: [],
-    head: [t('name'), t('unit'), t('inStock'), t('perDay'), t('colAdmins'), t('freq'), t('threshold'), t('status'), t('colMissing'), t('medValue'), t('medNotes')],
+    head: [t('name'), t('unit'), t('inStock'), t('perDay'), t('colAdmins'), t('freq'), t('threshold'), t('status'), t('colMissing'), t('bk'), t('medValue'), t('medNotes')],
     rows: S.meds.map(m => {
       const need = dailyNeed(m.id), thr = threshold(m.id), st = num(m.stock);
-      return [m.name, m.unit, fmtN(st), fmtN(need), adminsPerDay(m.id), freqLabel(m), fmtN(thr), need <= 0 ? t('notInTherapy') : st < thr ? t('short') : t('ok'), need > 0 && st < thr ? fmtN(thr - st) : '', m.value ?? '', (m.notes || '').replace(/\n/g, ' ')];
+      return [m.name, m.unit, fmtN(st), fmtN(need), adminsPerDay(m.id), freqLabel(m), fmtN(thr), need <= 0 ? t('notInTherapy') : st < thr ? t('short') : t('ok'), need > 0 && st < thr ? fmtN(thr - st) : '', fmtN(num(m.bk)), m.value ?? '', (m.notes || '').replace(/\n/g, ' ')];
     }),
   }),
   therapy: () => ({
@@ -626,6 +632,7 @@ function viewStock() {
         ${[[1, t('freqDaily')], [2, t('freqEvery', { n: 2 })], [3, t('freqEvery', { n: 3 })], [7, t('freqWeekly')], [14, t('freqEvery', { n: 14 })], [28, t('freqEvery', { n: 28 })], [30, t('freqEvery', { n: 30 })]].map(([n, l]) => `<option value="${n}" ${every(m) === n ? 'selected' : ''}>${h(l)}</option>`).join('')}
         ${[1, 2, 3, 7, 14, 28, 30].includes(every(m)) ? '' : `<option selected>${h(freqLabel(m))}</option>`}<option value="other">${h(t('freqOther'))}</option></select></label>
         ${every(m) > 1 ? `<label class="f" style="margin:0"><span>${t('freqFrom')}</span><input type="date" value="${h(m.from || '')}" onchange="A.medField('${m.id}','from',this.value)"></label>` : ''}</div>
+      <div class="row" style="margin-top:8px"><label class="f" style="margin:0"><span>${t('bk')}</span><input type="number" min="0" value="${num(m.bk)}" title="${h(t('bkHelp'))}" onchange="A.setBk('${m.id}',this.value)"></label>${num(m.bk) > 0 ? `<button class="small" onclick="A.bkBack('${m.id}')">↩ ${t('bkBack')}</button>` : ''}<span class="muted" style="font-size:13px">${t('bkHelp')}</span></div>
       <div class="row" style="margin-top:8px"><label class="f" style="margin:0"><span>${t('medValue')}</span><input type="text" value="${h(m.value ?? '')}" onchange="A.medField('${m.id}','value',this.value)"></label>
       <label class="f grow" style="margin:0"><span>${t('medNotes')}</span><textarea style="min-height:44px" onchange="A.medField('${m.id}','notes',this.value)">${h(m.notes || '')}</textarea></label></div></div>`;
   });
@@ -644,15 +651,16 @@ function viewSupply() {
     <tr><td>${t('endCycle')}</td><td>${fmtDate(ci.end)}</td></tr>
     <tr><td>${t('alertOn')}</td><td>${fmtDate(ci.alert)}</td></tr></table>
     ${ci.c.items.filter(i => i.short > 0).map(i => `<div class="neg" style="margin-top:6px">${h(i.name)}: ${h(t(i.short <= 1 ? 'missingForPrep1' : 'missingForPrep', { n: fmtN(i.short), u: unitFor(i.unit, i.short), d: Math.floor(i.taken / (i.need / ci.c.days)), g: unitFor(t('daysWord'), Math.floor(i.taken / (i.need / ci.c.days))) }))}</div>`).join('')}
+    ${ci.c.items.some(i => num(i.bk) > 0) ? `<div class="muted" style="margin-top:6px">${t('bkSetAside')}: ${ci.c.items.filter(i => num(i.bk) > 0).map(i => h(`${i.name} ${fmtN(i.bk)} ${unitFor(i.unit, i.bk)}`)).join(', ')}</div>` : ''}
     <div style="margin-top:8px"><button class="danger" onclick="A.undoPrep()">${t('undoPrep')}</button></div>`;
   html += `</div><div class="card"><h2>${t('prepare', { n: days })}</h2>
     <label class="f"><span>${t('prepDate')}</span><input type="date" value="${prepDateSel}" onchange="prepDateSel=this.value"></label>
-    <h3>${t('preview')}</h3><table><tr><th></th><th class="num">${t('inStock')}</th><th class="num">${t('need')}</th><th class="num">${t('after')}</th></tr>`;
+    <h3>${t('preview')}</h3><div style="overflow-x:auto"><table><tr><th></th><th class="num">${t('inStock')}</th><th class="num">${t('need')}</th><th class="num">${t('bk')}</th><th class="num">${t('after')}</th></tr>`;
   S.meds.filter(m => dailyNeed(m.id) > 0).forEach(m => {
-    const need = needFor(m.id, prepDateSel, days), after = num(m.stock) - need;
-    html += `<tr><td>${h(m.name)}</td><td class="num">${fmtN(num(m.stock))}</td><td class="num">${fmtN(need)}</td><td class="num ${after < 0 ? 'neg' : ''}">${fmtN(after)}</td></tr>`;
+    const need = needFor(m.id, prepDateSel, days), bk = num(bkSel[m.id]), after = num(m.stock) - need - bk;
+    html += `<tr><td>${h(m.name)}</td><td class="num">${fmtN(num(m.stock))}</td><td class="num">${fmtN(need)}</td><td class="num"><input type="number" min="0" step="1" value="${bk || ''}" placeholder="0" style="width:56px" aria-label="${h(t('bk'))}" onchange="bkSel['${m.id}']=Math.max(0,num(this.value));render()"></td><td class="num ${after < 0 ? 'neg' : ''}">${fmtN(after)}</td></tr>`;
   });
-  html += `</table><div style="margin-top:10px"><button class="pri" onclick="A.prepare()">📦 ${t('prepare', { n: days })}</button></div></div>`;
+  html += `</table></div><p class="muted" style="margin-top:6px">${t('bkPrepHelp')}</p><div style="margin-top:10px"><button class="pri" onclick="A.prepare()">📦 ${t('prepare', { n: days })}</button></div></div>`;
   const sh = shortages();
   html += `<div class="card" id="short"><h2>${t('shortList')} (${sh.length})</h2><p class="muted">${t('shortHelp', { n: days, m: days * 2 })}</p>`;
   html += sh.length ? `<table><tr><th></th><th class="num">${t('inStock')}</th><th class="num">${t('threshold')}</th><th class="num">${t('missing')}</th></tr>${sh.map(s => `<tr><td>${h(s.m.name)}</td><td class="num">${fmtN(s.stock)}</td><td class="num">${fmtN(s.thr)}</td><td class="num neg">${fmtN(s.miss)} ${h(unitFor(s.m.unit, s.miss))}</td></tr>`).join('')}</table>` : `<div class="muted">${t('noShort')}</div>`;
