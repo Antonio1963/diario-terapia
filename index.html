@@ -64,11 +64,24 @@ nav button .i{font-size:20px}
 nav button.on{color:var(--acc);font-weight:600}
 .datenav{display:flex;gap:8px;align-items:center;justify-content:space-between}
 .datenav b{text-align:center;flex:1}
-#byline{position:fixed;left:2px;top:50%;writing-mode:vertical-rl;transform:translateY(-50%) rotate(180deg);font-size:36px;letter-spacing:6px;color:var(--fg);opacity:.16;pointer-events:none;user-select:none;z-index:6;white-space:nowrap}
+#byline{position:fixed;left:2px;top:50%;writing-mode:vertical-rl;transform:translateY(-50%) rotate(180deg);font-size:18px;letter-spacing:3px;color:var(--fg);opacity:.16;pointer-events:none;user-select:none;z-index:6;white-space:nowrap}
 main,.banner{padding-left:max(22px,env(safe-area-inset-left))}
 nav button{font-size:10px}
 @media (max-width:420px){header h1{display:none}}
 nav button .l{display:block;max-width:100%;overflow:hidden;text-overflow:ellipsis}
+/* Magazzino: sempre chiaro, anche se il telefono è in modalità scura (v1.6) */
+body.light{--bg:#f4f6fa;--card:#fff;--fg:#1b2330;--muted:#5d6878;--line:#dfe4ec;--acc:#1f6feb;--ok:#1a7f37;--okbg:#e6f4ea;--warn:#9a6700;--warnbg:#fff4d6;--bad:#c62828;--badbg:#fdecec;color-scheme:light}
+.search{position:sticky;top:var(--hh,60px);z-index:4;background:var(--bg);padding:4px 0 8px;margin-bottom:4px}
+.search input{width:100%;box-sizing:border-box;padding:10px 12px;background:var(--card)}
+details.mc{padding:0}
+details.mc>summary{list-style:none;cursor:pointer;display:flex;align-items:center;gap:10px;padding:12px 14px}
+details.mc>summary::-webkit-details-marker{display:none}
+details.mc>summary .ar{display:inline-block;font-size:12px;color:var(--muted);transition:transform .15s;width:12px}
+details.mc[open]>summary .ar{transform:rotate(90deg)}
+details.mc>summary .nm{font-weight:600;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+details.mc>summary .rt{display:flex;flex-direction:column;align-items:flex-end;gap:3px;flex-shrink:0}
+details.mc>summary .qt{font-size:13px;color:var(--muted);white-space:nowrap}
+details.mc .body{padding:0 14px 12px;border-top:1px solid var(--line);padding-top:10px}
 pre{white-space:pre-wrap;font:inherit;font-size:14px;background:var(--bg);padding:10px;border-radius:8px;margin:8px 0}
 </style>
 </head>
@@ -95,7 +108,7 @@ const todayStr = () => ymd(new Date());
 const nowHM = () => { const d = new Date(); return `${pad(d.getHours())}:${pad(d.getMinutes())}`; };
 const h = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const num = v => { const n = parseFloat(String(v).replace(',', '.')); return isFinite(n) ? n : 0; };
-const APP_VERSION = '1.5'; // aumentare di 0.1 a ogni rilascio (1.1, 1.2…) insieme a VERSION in sw.js
+const APP_VERSION = '1.6'; // aumentare di 0.1 a ogni rilascio (1.1, 1.2…) insieme a VERSION in sw.js
 const fmtN = n => String(Math.round(n * 100) / 100);
 // Singolare/plurale dell'unità: "1 compressa", "2 compresse". Vale per le unità più comuni in tutte le lingue.
 const UNIT_FORMS = {
@@ -307,9 +320,17 @@ function waUrl(text) {
 }
 
 // ---- azioni ----
+let stockQ = '', stockOpen = new Set();
 let tab = 'today', viewDate = todayStr(), prepDateSel = todayStr(), bkSel = {};
 const A = {
   tab(x) { tab = x; render(); window.scrollTo(0, 0); },
+  // Magazzino: la ricerca filtra le schede senza ridisegnare, così il cursore resta nel campo
+  stockSearch(v) {
+    stockQ = v; const q = v.trim().toLowerCase(); let any = false;
+    document.querySelectorAll('details.mc').forEach(d => { const ok = !q || d.dataset.q.includes(q); d.hidden = !ok; any = any || ok; });
+    const n = document.getElementById('stockNone'); if (n) n.hidden = any;
+  },
+  stockToggle(id, open) { if (open) stockOpen.add(id); else stockOpen.delete(id); },
   shiftDate(n) { viewDate = n === 0 ? todayStr() : addDays(viewDate, n); render(); },
   setDate(v) { if (v) { viewDate = v; render(); } },
   mark(slotId, medId, status) {
@@ -614,8 +635,13 @@ function viewTherapy() {
   });
   return html + exportBtns('therapy');
 }
+function stockMatch(m) {
+  const q = stockQ.trim().toLowerCase();
+  return !q || [m.name, m.value ?? '', m.notes || ''].join(' ').toLowerCase().includes(q);
+}
 function viewStock() {
-  let html = `<div class="card"><h2>${t('addMed')}</h2><div class="row">
+  let html = S.meds.length ? `<div class="search"><input type="search" id="stockQ" value="${h(stockQ)}" placeholder="🔍 ${h(t('searchMed'))}" aria-label="${h(t('searchMed'))}" oninput="A.stockSearch(this.value)"></div>` : '';
+  html += `<div class="card"><h2>${t('addMed')}</h2><div class="row">
     <input class="grow" id="mName" placeholder="${h(t('name'))}">
     <input id="mUnit" placeholder="${h(t('unit'))}" value="${h(t('unitDefault'))}" style="width:120px">
     <input type="number" id="mStock" min="0" placeholder="${h(t('initialStock'))}" aria-label="${h(t('initialStock'))}">
@@ -624,7 +650,9 @@ function viewStock() {
   S.meds.forEach(m => {
     const need = dailyNeed(m.id), thr = threshold(m.id), st = num(m.stock);
     const badge = need <= 0 ? `<span class="badge b-mut">${t('notInTherapy')}</span>` : st < thr ? `<span class="badge b-bad">${t('short')} · ${t('missing')} ${fmtN(thr - st)}</span>` : `<span class="badge b-ok">${t('ok')}</span>`;
-    html += `<div class="card"><div class="row between"><input class="grow" value="${h(m.name)}" aria-label="${h(t('rename'))}" onchange="A.medField('${m.id}','name',this.value)" style="font-weight:600">${badge}</div>
+    html += `<details class="card mc" data-q="${h([m.name, m.value ?? '', m.notes || ''].join(' ').toLowerCase())}" ${stockOpen.has(m.id) ? 'open' : ''} ontoggle="A.stockToggle('${m.id}',this.open)"${stockMatch(m) ? '' : ' hidden'}>
+      <summary><span class="ar">▶</span><span class="nm">${h(m.name)}</span><span class="rt"><span class="qt">${fmtN(st)} ${h(unitFor(m.unit, st))}</span>${badge}</span></summary><div class="body">
+      <label class="f" style="margin-top:0"><span>${t('rename')}</span><input value="${h(m.name)}" onchange="A.medField('${m.id}','name',this.value)" style="font-weight:600"></label>
       <div class="row muted" style="margin:6px 0">${t('inStock')}: <b style="color:var(--fg)">${fmtN(st)} ${h(unitFor(m.unit, st))}</b> · ${t('perDay')}: ${fmtN(need)} (${adminsPerDay(m.id)} ${t('adminsDay')}, ${h(freqLabel(m).toLowerCase())}) · ${t('threshold')}: ${fmtN(thr)}</div>
       <div class="row"><input type="number" id="ld_${m.id}" min="0" placeholder="+" aria-label="${h(t('load'))}"><button onclick="A.loadStock('${m.id}')">${t('load')}: ${t('loadBtn')}</button>
       <span class="muted">${t('setStock')}</span><input type="number" value="${st}" onchange="A.medField('${m.id}','stock',this.value)">
@@ -639,8 +667,9 @@ function viewStock() {
         <div class="row" style="margin-top:6px"><span>${t('bkBackLbl')}</span><input type="number" id="bkb_${m.id}" min="0" placeholder="0" style="width:80px" aria-label="${h(t('bkBackLbl'))}"><button class="small" onclick="A.bkBack('${m.id}')">↩ ${t('bkBackBtn')}</button></div>
         <div class="muted" style="font-size:13px;margin-top:4px">${t('bkHelp')}</div></div>
       <div class="row" style="margin-top:8px"><label class="f" style="margin:0"><span>${t('medValue')}</span><input type="text" value="${h(m.value ?? '')}" onchange="A.medField('${m.id}','value',this.value)"></label>
-      <label class="f grow" style="margin:0"><span>${t('medNotes')}</span><textarea style="min-height:44px" onchange="A.medField('${m.id}','notes',this.value)">${h(m.notes || '')}</textarea></label></div></div>`;
+      <label class="f grow" style="margin:0"><span>${t('medNotes')}</span><textarea style="min-height:44px" onchange="A.medField('${m.id}','notes',this.value)">${h(m.notes || '')}</textarea></label></div></div></details>`;
   });
+  if (S.meds.length) html += `<p class="muted" id="stockNone" ${S.meds.some(stockMatch) ? 'hidden' : ''}>${t('noMatch')}</p>`;
   return html + exportBtns('stock');
 }
 function viewSupply() {
@@ -769,6 +798,7 @@ function renderBanner() {
 const TABS = [['today', '📅', 'tabToday'], ['therapy', '💊', 'tabTherapy'], ['stock', '📦', 'tabStock'], ['supply', '🚚', 'tabSupply'], ['patient', '👤', 'tabPatient'], ['settings', '⚙️', 'tabSettings'], ['help', '❓', 'tabHelp']];
 function render() {
   document.documentElement.lang = P.lang;
+  document.body.classList.toggle('light', tab === 'stock' && !locked());
   document.title = t('appTitle');
   document.getElementById('title').textContent = t('appTitle');
   // la copia su GitHub Pages è l'ambiente di prova, la produzione gira sulla NAS
@@ -783,6 +813,7 @@ function render() {
     renderBanner();
     document.getElementById('view').innerHTML = { today: viewToday, therapy: viewTherapy, stock: viewStock, supply: viewSupply, patient: viewPatient, settings: viewSettings, help: viewHelp }[tab]();
   }
+  document.documentElement.style.setProperty('--hh', document.querySelector('header').offsetHeight + 'px');
   const ib = document.getElementById('installBtn'); ib.textContent = t('install'); ib.hidden = !deferredPrompt;
 }
 
