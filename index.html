@@ -112,7 +112,7 @@ const todayStr = () => ymd(new Date());
 const nowHM = () => { const d = new Date(); return `${pad(d.getHours())}:${pad(d.getMinutes())}`; };
 const h = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const num = v => { const n = parseFloat(String(v).replace(',', '.')); return isFinite(n) ? n : 0; };
-const APP_VERSION = '1.9'; // aumentare di 0.1 a ogni rilascio (1.1, 1.2…) insieme a VERSION in sw.js
+const APP_VERSION = '2.0'; // aumentare di 0.1 a ogni rilascio (1.1, 1.2…) insieme a VERSION in sw.js
 const fmtN = n => String(Math.round(n * 100) / 100);
 // Singolare/plurale dell'unità: "1 compressa", "2 compresse". Vale per le unità più comuni in tutte le lingue.
 const UNIT_FORMS = {
@@ -347,6 +347,33 @@ function applySearch() {
   const n = document.getElementById('noMatch'); if (n) n.hidden = !q || any || !v.querySelector('[data-q]');
 }
 let tab = 'today', viewDate = todayStr(), prepDateSel = todayStr(), bkSel = {};
+// promemoria esportazione (v2.0): ogni 60 giorni dall'ultima esportazione (o dal primo uso)
+const EXPORT_EVERY = 60;
+function markExport() { S.settings.lastExport = todayStr(); delete S.settings.exportSnooze; save(); renderBanner(); }
+function exportDue() {
+  const since = diffDays(todayStr(), S.settings.lastExport || P.firstUse || todayStr());
+  return since >= EXPORT_EVERY && !(S.settings.exportSnooze && todayStr() < S.settings.exportSnooze) ? since : 0;
+}
+function buildExport(kind, fmt) {
+  const { title, head, rows, info } = exportTables[kind]();
+  const pat = S.settings.patientName || '';
+  let out;
+  if (fmt === 'csv') {
+    // separatore ";" così Excel in italiano apre le colonne correttamente
+    // numeri con la virgola decimale dove il foglio di calcolo se lo aspetta (it, fr, es)
+    const dec = ['it', 'fr', 'es'].includes(P.lang);
+    const cell = v => { v = String(v ?? ''); if (dec && /^-?\d+\.\d+$/.test(v)) v = v.replace('.', ','); return /[";\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; };
+    const line = r => r.map(cell).join(';');
+    out = [...info.map(line), ...(info.length ? [''] : []), line(head), ...rows.map(line)].join('\r\n');
+  } else {
+    const w = head.map((x, i) => Math.max(String(x).length, ...rows.map(r => String(r[i] ?? '').length)));
+    const line = r => r.map((v, i) => String(v ?? '').padEnd(w[i])).join('  ').trimEnd();
+    out = [`${title}${pat ? ' - ' + pat : ''}`, fmtDate(todayStr()), '', ...info.map(r => r.join(': ')), ...(info.length ? [''] : []),
+      line(head), w.map(n => '-'.repeat(n)).join('  '), ...rows.map(line)].join('\n');
+  }
+  const slug = (title + (pat ? '-' + pat : '')).toLowerCase().normalize('NFD').replace(/[^a-z0-9\u4e00-\u9fff]+/g, '-').replace(/^-|-$/g, '');
+  return { slug, out };
+}
 const A = {
   tab(x) { tab = x; render(); window.scrollTo(0, 0); },
   // Magazzino: la ricerca filtra le schede senza ridisegnare, così il cursore resta nel campo
@@ -524,28 +551,23 @@ const A = {
     const files = {};
     for (const d of S.docs) if (d.fileName) { const b = await IDB.get(d.id).catch(() => null); if (b) files[d.id] = await blobToDataURL(b); }
     download(`diario-terapia-backup-${todayStr()}.json`, JSON.stringify({ ...S, trialStart: P.firstUse, license: licensed ? P.license : undefined, files }), 'application/json');
+    markExport();
   },
   importJson() { document.getElementById('fileIn').click(); },
   exportData(kind, fmt) {
-    const { title, head, rows, info } = exportTables[kind]();
-    const pat = S.settings.patientName || '';
-    let out;
-    if (fmt === 'csv') {
-      // separatore ";" così Excel in italiano apre le colonne correttamente
-      // numeri con la virgola decimale dove il foglio di calcolo se lo aspetta (it, fr, es)
-      const dec = ['it', 'fr', 'es'].includes(P.lang);
-      const cell = v => { v = String(v ?? ''); if (dec && /^-?\d+\.\d+$/.test(v)) v = v.replace('.', ','); return /[";\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; };
-      const line = r => r.map(cell).join(';');
-      out = [...info.map(line), ...(info.length ? [''] : []), line(head), ...rows.map(line)].join('\r\n');
-    } else {
-      const w = head.map((x, i) => Math.max(String(x).length, ...rows.map(r => String(r[i] ?? '').length)));
-      const line = r => r.map((v, i) => String(v ?? '').padEnd(w[i])).join('  ').trimEnd();
-      out = [`${title}${pat ? ' - ' + pat : ''}`, fmtDate(todayStr()), '', ...info.map(r => r.join(': ')), ...(info.length ? [''] : []),
-        line(head), w.map(n => '-'.repeat(n)).join('  '), ...rows.map(line)].join('\n');
-    }
-    const slug = (title + (pat ? '-' + pat : '')).toLowerCase().normalize('NFD').replace(/[^a-z0-9\u4e00-\u9fff]+/g, '-').replace(/^-|-$/g, '');
+    const { slug, out } = buildExport(kind, fmt);
     download(`${slug}-${todayStr()}.${fmt}`, out, fmt === 'csv' ? 'text/csv;charset=utf-8' : 'text/plain;charset=utf-8');
+    markExport();
   },
+  // v2.0: dal promemoria, un unico file TXT con Magazzino, Terapia e Rifornimento
+  exportAll() {
+    const pat = S.settings.patientName || '';
+    const out = ['stock', 'therapy', 'supply'].map(k => buildExport(k, 'txt').out).join('\n\n\n');
+    const slug = ('diario-terapia' + (pat ? '-' + pat : '')).toLowerCase().normalize('NFD').replace(/[^a-z0-9\u4e00-\u9fff]+/g, '-').replace(/^-|-$/g, '');
+    download(`${slug}-${todayStr()}.txt`, out);
+    markExport();
+  },
+  exportLater() { S.settings.exportSnooze = addDays(todayStr(), 7); save(); render(); },
   exportDiary() {
     const rows = Object.entries(S.log).map(([k, v]) => ({ d: k.split('|')[0], ...v })).sort((a, b) => (a.d + a.slotTime).localeCompare(b.d + b.slotTime));
     let out = `${t('diaryTitle')}${S.settings.patientName ? ' - ' + S.settings.patientName : ''}\n`, last = '';
@@ -784,6 +806,7 @@ function viewHelp() {
   const man = (I18N[P.lang] || I18N.it).manual || I18N.it.manual;
   return `<div class="card"><h2>✉️ ${t('support')}</h2><p>${t('supportText')}</p><p><a class="btn" href="mailto:${SUPPORT_EMAIL}?subject=${encodeURIComponent(t('appTitle'))}">${SUPPORT_EMAIL}</a></p></div>
     ${licenseCard()}
+    <div class="card"><h2>📤 ${t('exportTipTitle')}</h2><p style="margin:0">${t('exportTip', { n: EXPORT_EVERY })}</p>${S.settings.lastExport ? `<p class="muted">${t('exportLast')}: ${fmtDate(S.settings.lastExport)}</p>` : ''}<div class="row" style="margin-top:8px"><button onclick="A.exportAll()">⬇ ${t('exportNow')}</button></div></div>
     <div class="card"><h2>📖 ${t('manualTitle')}</h2>${man.map(([ti, tx]) => `<h3 style="margin-top:12px">${h(ti)}</h3><p style="margin:0;white-space:pre-line">${h(tx)}</p>`).join('')}</div>
     <p class="muted" style="text-align:center">${t('appTitle')} · v${APP_VERSION} · By Antonio Chitano</p>`;
 }
@@ -821,6 +844,8 @@ function renderBanner() {
     }
   }
   if (licChecked && !licensed && trialLeft() <= 10) out.push(`<div class="b-warn">⏳ ${t('licEnding', { n: trialLeft() })}<button class="small" onclick="A.tab('help')">${t('open')}</button></div>`);
+  const ed = exportDue();
+  if (ed) out.push(`<div class="b-info">📤 ${h(t(S.settings.lastExport ? 'exportRemind' : 'exportRemindNever', { n: S.settings.lastExport ? ed : EXPORT_EVERY }))}<span class="row"><button class="small pri" onclick="A.exportAll()">⬇ ${t('exportNow')}</button><button class="small" onclick="A.exportLater()">${t('exportLater')}</button></span></div>`);
   expiringPlans().forEach(d => out.push(`<div class="b-warn">⚠ ${h(t('planBanner', { t: d.title, d: fmtDate(d.expiry) }))}<button class="small" onclick="A.tab('patient')">${t('open')}</button></div>`));
   document.getElementById('banner').innerHTML = out.join('<div style="height:6px;padding:0"></div>');
 }
