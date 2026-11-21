@@ -13,8 +13,8 @@
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icon-192.png">
 <style>
-:root{--bg:#f4f6fa;--card:#fff;--fg:#1b2330;--muted:#5d6878;--line:#dfe4ec;--acc:#1f6feb;--ok:#1a7f37;--okbg:#e6f4ea;--warn:#9a6700;--warnbg:#fff4d6;--bad:#c62828;--badbg:#fdecec}
-@media (prefers-color-scheme:dark){:root{--bg:#0f141b;--card:#18202a;--fg:#e6edf3;--muted:#9aa7b4;--line:#2b3542;--acc:#4c8dff;--ok:#56d364;--okbg:#14301d;--warn:#e3b341;--warnbg:#332a10;--bad:#ff7b72;--badbg:#3a1616}}
+/* v1.7: tema sempre chiaro in tutte le schede, fondo un filo più scuro */
+:root{color-scheme:light;--bg:#e4e9f0;--card:#fbfcfd;--fg:#1b2330;--muted:#556070;--line:#d2d9e3;--acc:#1f6feb;--ok:#1a7f37;--okbg:#e6f4ea;--warn:#9a6700;--warnbg:#fff4d6;--bad:#c62828;--badbg:#fdecec}
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,"PingFang SC","Microsoft YaHei",sans-serif;padding-bottom:calc(72px + env(safe-area-inset-bottom))}
 header{position:sticky;top:0;z-index:5;background:var(--acc);color:#fff;padding:calc(10px + env(safe-area-inset-top)) 16px 10px;display:flex;align-items:center;gap:8px}
@@ -69,8 +69,6 @@ main,.banner{padding-left:max(22px,env(safe-area-inset-left))}
 nav button{font-size:10px}
 @media (max-width:420px){header h1{display:none}}
 nav button .l{display:block;max-width:100%;overflow:hidden;text-overflow:ellipsis}
-/* Magazzino: sempre chiaro, anche se il telefono è in modalità scura (v1.6) */
-body.light{--bg:#f4f6fa;--card:#fff;--fg:#1b2330;--muted:#5d6878;--line:#dfe4ec;--acc:#1f6feb;--ok:#1a7f37;--okbg:#e6f4ea;--warn:#9a6700;--warnbg:#fff4d6;--bad:#c62828;--badbg:#fdecec;color-scheme:light}
 .search{position:sticky;top:var(--hh,60px);z-index:4;background:var(--bg);padding:4px 0 8px;margin-bottom:4px}
 .search input{width:100%;box-sizing:border-box;padding:10px 12px;background:var(--card)}
 details.mc{padding:0}
@@ -108,7 +106,7 @@ const todayStr = () => ymd(new Date());
 const nowHM = () => { const d = new Date(); return `${pad(d.getHours())}:${pad(d.getMinutes())}`; };
 const h = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const num = v => { const n = parseFloat(String(v).replace(',', '.')); return isFinite(n) ? n : 0; };
-const APP_VERSION = '1.6'; // aumentare di 0.1 a ogni rilascio (1.1, 1.2…) insieme a VERSION in sw.js
+const APP_VERSION = '1.7'; // aumentare di 0.1 a ogni rilascio (1.1, 1.2…) insieme a VERSION in sw.js
 const fmtN = n => String(Math.round(n * 100) / 100);
 // Singolare/plurale dell'unità: "1 compressa", "2 compresse". Vale per le unità più comuni in tutte le lingue.
 const UNIT_FORMS = {
@@ -798,7 +796,6 @@ function renderBanner() {
 const TABS = [['today', '📅', 'tabToday'], ['therapy', '💊', 'tabTherapy'], ['stock', '📦', 'tabStock'], ['supply', '🚚', 'tabSupply'], ['patient', '👤', 'tabPatient'], ['settings', '⚙️', 'tabSettings'], ['help', '❓', 'tabHelp']];
 function render() {
   document.documentElement.lang = P.lang;
-  document.body.classList.toggle('light', tab === 'stock' && !locked());
   document.title = t('appTitle');
   document.getElementById('title').textContent = t('appTitle');
   // la copia su GitHub Pages è l'ambiente di prova, la produzione gira sulla NAS
