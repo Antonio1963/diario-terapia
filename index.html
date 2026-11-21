@@ -80,6 +80,11 @@ details.mc>summary .nm{font-weight:600;font-size:17px;flex:1;min-width:0;overflo
 details.mc>summary .rt{display:flex;flex-direction:column;align-items:flex-end;gap:3px;flex-shrink:0}
 details.mc>summary .qt{font-size:13px;color:var(--muted);white-space:nowrap}
 details.mc .body{padding:0 14px 12px;border-top:1px solid var(--line);padding-top:10px}
+#updBar{position:fixed;left:12px;right:12px;bottom:calc(66px + env(safe-area-inset-bottom));z-index:7;max-width:736px;margin:0 auto;background:#1b2330;color:#fff;border-radius:12px;padding:10px 12px;display:flex;gap:10px;align-items:center;box-shadow:0 4px 16px rgba(0,0,0,.25)}
+#updBar[hidden]{display:none}
+#updBar span{flex:1;font-size:15px}
+#updBar button{border:0}
+#updBar .x{background:none;color:#fff;font-size:18px;padding:4px 8px}
 pre{white-space:pre-wrap;font:inherit;font-size:14px;background:var(--bg);padding:10px;border-radius:8px;margin:8px 0}
 </style>
 </head>
@@ -88,6 +93,7 @@ pre{white-space:pre-wrap;font:inherit;font-size:14px;background:var(--bg);paddin
 <div id="byline" aria-hidden="true">By Antonio Chitano</div>
 <div id="banner" class="banner"></div>
 <main id="view"></main>
+<div id="updBar" hidden></div>
 <nav id="tabs"></nav>
 <input type="file" id="fileIn" accept="application/json,.json" hidden>
 <script src="i18n.js"></script>
@@ -106,7 +112,7 @@ const todayStr = () => ymd(new Date());
 const nowHM = () => { const d = new Date(); return `${pad(d.getHours())}:${pad(d.getMinutes())}`; };
 const h = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const num = v => { const n = parseFloat(String(v).replace(',', '.')); return isFinite(n) ? n : 0; };
-const APP_VERSION = '1.8'; // aumentare di 0.1 a ogni rilascio (1.1, 1.2…) insieme a VERSION in sw.js
+const APP_VERSION = '1.9'; // aumentare di 0.1 a ogni rilascio (1.1, 1.2…) insieme a VERSION in sw.js
 const fmtN = n => String(Math.round(n * 100) / 100);
 // Singolare/plurale dell'unità: "1 compressa", "2 compresse". Vale per le unità più comuni in tutte le lingue.
 const UNIT_FORMS = {
@@ -844,7 +850,35 @@ function render() {
 let deferredPrompt = null;
 window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); deferredPrompt = e; render(); });
 document.getElementById('installBtn').onclick = () => { if (deferredPrompt) { deferredPrompt.prompt(); deferredPrompt = null; render(); } };
-if ('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('sw.js').catch(() => {});
+let swReg = null;
+if ('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('sw.js').then(r => { swReg = r; }).catch(() => {});
+
+// ---- avviso di aggiornamento (v1.9) ----
+// Legge la versione pubblicata in sw.js: se è diversa da quella in uso, mostra l'avviso con "Riavvia".
+let updShown = '';
+function showUpd(html) { const b = document.getElementById('updBar'); b.innerHTML = html; b.hidden = false; }
+function checkUpdate() {
+  if (!location.protocol.startsWith('http') || !navigator.onLine) return;
+  fetch('sw.js', { cache: 'no-store' }).then(r => r.ok ? r.text() : '').then(txt => {
+    const m = txt.match(/VERSION = 'terapia-([\d.]+)'/);
+    if (!m || m[1] === APP_VERSION || updShown === m[1]) return;
+    updShown = m[1];
+    if (swReg) swReg.update().catch(() => {});
+    showUpd(`<span>🔄 ${h(t('updReady', { v: m[1] }))}</span><button class="pri" onclick="location.reload()">${t('updBtn')}</button>`);
+  }).catch(() => {});
+}
+setTimeout(checkUpdate, 3000);
+setInterval(checkUpdate, 30 * 60000);
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') checkUpdate(); });
+// dopo il riavvio conferma la nuova versione (setTimeout: dopo load(), così la lingua è già pronta)
+setTimeout(() => { try {
+  const lv = localStorage.getItem('diarioTerapia.appVersion');
+  if (lv && lv !== APP_VERSION) {
+    showUpd(`<span>✅ ${h(t('updDone', { v: APP_VERSION }))}</span><button class="x" aria-label="OK" onclick="this.parentElement.hidden=true">✕</button>`);
+    setTimeout(() => { const b = document.getElementById('updBar'); if (!updShown) b.hidden = true; }, 8000);
+  }
+  localStorage.setItem('diarioTerapia.appVersion', APP_VERSION);
+} catch (e) {} }, 0);
 // richiede al browser di non cancellare i dati salvati
 if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
 
