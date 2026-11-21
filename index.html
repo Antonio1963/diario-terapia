@@ -76,7 +76,7 @@ details.mc>summary{list-style:none;cursor:pointer;display:flex;align-items:cente
 details.mc>summary::-webkit-details-marker{display:none}
 details.mc>summary .ar{display:inline-block;font-size:12px;color:var(--muted);transition:transform .15s;width:12px}
 details.mc[open]>summary .ar{transform:rotate(90deg)}
-details.mc>summary .nm{font-weight:600;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+details.mc>summary .nm{font-weight:600;font-size:17px;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 details.mc>summary .rt{display:flex;flex-direction:column;align-items:flex-end;gap:3px;flex-shrink:0}
 details.mc>summary .qt{font-size:13px;color:var(--muted);white-space:nowrap}
 details.mc .body{padding:0 14px 12px;border-top:1px solid var(--line);padding-top:10px}
@@ -106,7 +106,7 @@ const todayStr = () => ymd(new Date());
 const nowHM = () => { const d = new Date(); return `${pad(d.getHours())}:${pad(d.getMinutes())}`; };
 const h = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const num = v => { const n = parseFloat(String(v).replace(',', '.')); return isFinite(n) ? n : 0; };
-const APP_VERSION = '1.7'; // aumentare di 0.1 a ogni rilascio (1.1, 1.2…) insieme a VERSION in sw.js
+const APP_VERSION = '1.8'; // aumentare di 0.1 a ogni rilascio (1.1, 1.2…) insieme a VERSION in sw.js
 const fmtN = n => String(Math.round(n * 100) / 100);
 // Singolare/plurale dell'unità: "1 compressa", "2 compresse". Vale per le unità più comuni in tutte le lingue.
 const UNIT_FORMS = {
@@ -318,17 +318,35 @@ function waUrl(text) {
 }
 
 // ---- azioni ----
-let stockQ = '', stockOpen = new Set();
+// v1.8: ricerca e schede apribili con la freccetta in Oggi, Terapia, Magazzino e Rifornimento
+let qs = {}, openSt = {}; // testo cercato per scheda; aperto/chiuso scelto a mano per ogni riquadro
+function isOpen(k, def) { return k in openSt ? openSt[k] : def; }
+function searchBar(ph) { return `<div class="search"><input type="search" id="tabQ" value="${h(qs[tab] || '')}" placeholder="🔍 ${h(t(ph))}" aria-label="${h(t(ph))}" oninput="A.search(this.value)"></div>`; }
+const noMatchP = () => `<p class="muted" id="noMatch" hidden>${t('noMatch')}</p>`;
+// riquadro apribile: k = chiave per ricordare aperto/chiuso, def = aperto di partenza, fg = gruppo che si apre da solo quando la ricerca trova qualcosa dentro
+function fold(k, def, head, right, body, cls = '', attrs = '') {
+  return `<details class="card mc ${cls}" data-k="${k}" data-def="${def ? 1 : 0}" ${isOpen(k, def) ? 'open' : ''} ${attrs}><summary onclick="A.tog(this)"><span class="ar">▶</span><span class="nm">${head}</span>${right ? `<span class="rt">${right}</span>` : ''}</summary><div class="body">${body}</div></details>`;
+}
+function applySearch() {
+  const v = document.getElementById('view'); if (!v) return;
+  const q = (qs[tab] || '').trim().toLowerCase(); let any = false;
+  v.querySelectorAll('[data-q]').forEach(e => { const ok = !q || e.dataset.q.includes(q); e.hidden = !ok; any = any || ok; });
+  v.querySelectorAll('details[data-k]').forEach(d => {
+    if (d.classList.contains('fg')) {
+      const has = [...d.querySelectorAll('[data-q]')].some(e => !e.hidden);
+      d.hidden = !!q && !has;
+      d.open = q ? has : isOpen(d.dataset.k, d.dataset.def === '1');
+    } else if (!q) d.open = isOpen(d.dataset.k, d.dataset.def === '1');
+  });
+  const n = document.getElementById('noMatch'); if (n) n.hidden = !q || any || !v.querySelector('[data-q]');
+}
 let tab = 'today', viewDate = todayStr(), prepDateSel = todayStr(), bkSel = {};
 const A = {
   tab(x) { tab = x; render(); window.scrollTo(0, 0); },
   // Magazzino: la ricerca filtra le schede senza ridisegnare, così il cursore resta nel campo
-  stockSearch(v) {
-    stockQ = v; const q = v.trim().toLowerCase(); let any = false;
-    document.querySelectorAll('details.mc').forEach(d => { const ok = !q || d.dataset.q.includes(q); d.hidden = !ok; any = any || ok; });
-    const n = document.getElementById('stockNone'); if (n) n.hidden = any;
-  },
-  stockToggle(id, open) { if (open) stockOpen.add(id); else stockOpen.delete(id); },
+  // la ricerca filtra senza ridisegnare, così il cursore resta nel campo
+  search(v) { qs[tab] = v; applySearch(); },
+  tog(s) { const d = s.parentElement; openSt[d.dataset.k] = !d.open; },
   shiftDate(n) { viewDate = n === 0 ? todayStr() : addDays(viewDate, n); render(); },
   setDate(v) { if (v) { viewDate = v; render(); } },
   mark(slotId, medId, status) {
@@ -343,7 +361,7 @@ const A = {
     S.schedule.filter(e => e.slotId === slotId && isDue(medById(e.medId), viewDate)).forEach(e => { if (!S.log[`${viewDate}|${slotId}|${e.medId}`]) A.mark(slotId, e.medId, 'given'); });
   },
   setTime(slotId, medId, v) { const k = `${viewDate}|${slotId}|${medId}`; if (S.log[k]) { S.log[k].time = v; save(); } },
-  addSlot() { S.slots.push({ id: uid(), time: '12:00', label: '' }); save(); render(); },
+  addSlot() { const id = uid(); S.slots.push({ id, time: '12:00', label: '' }); openSt['tp_' + id] = true; save(); render(); },
   slotField(id, f, v) { const s = S.slots.find(x => x.id === id); s[f] = v; save(); if (f === 'time') render(); },
   delSlot(id) {
     const s = S.slots.find(x => x.id === id);
@@ -564,22 +582,26 @@ function viewToday() {
   <span class="row"><input type="date" value="${viewDate}" onchange="A.setDate(this.value)">${viewDate !== todayStr() ? `<button class="small" onclick="A.shiftDate(0)">${t('today')}</button>` : ''}</span></div></div>`;
   const slots = slotsSorted();
   if (!slots.length) return html + `<div class="card muted">${t('noSlots')}</div>`;
+  html = searchBar('searchMedName') + html;
+  // aperta di partenza solo la prima fascia con farmaci ancora da segnare
+  const dueOf = sl => S.schedule.filter(e => e.slotId === sl.id && medById(e.medId) && isDue(medById(e.medId), viewDate));
+  const firstOpen = slots.find(sl => dueOf(sl).some(e => !S.log[`${viewDate}|${sl.id}|${e.medId}`]));
   slots.forEach(sl => {
-    const entries = S.schedule.filter(e => e.slotId === sl.id && medById(e.medId) && isDue(medById(e.medId), viewDate));
-    html += `<div class="card slot"><div class="row between"><span><span class="time">${h(sl.time)}</span> <span class="muted">${h(sl.label)}</span></span>
-      ${entries.some(e => !S.log[`${viewDate}|${sl.id}|${e.medId}`]) ? `<button class="small" onclick="A.markAll('${sl.id}')">${t('markAll')}</button>` : ''}</div>`;
-    if (!entries.length) html += `<div class="muted">${t('emptySlot')}</div>`;
+    const entries = dueOf(sl), done = entries.filter(e => S.log[`${viewDate}|${sl.id}|${e.medId}`]).length;
+    let body = entries.some(e => !S.log[`${viewDate}|${sl.id}|${e.medId}`]) ? `<div style="margin-bottom:6px"><button class="small" onclick="A.markAll('${sl.id}')">${t('markAll')}</button></div>` : '';
+    if (!entries.length) body += `<div class="muted">${t('emptySlot')}</div>`;
     entries.forEach(e => {
       const m = medById(e.medId), L = S.log[`${viewDate}|${sl.id}|${m.id}`];
-      html += `<div class="med ${L ? L.status : ''}"><div class="n"><b>${h(m.name)}</b> <span class="muted">${fmtN(num(e.qty))} ${h(unitFor(m.unit, num(e.qty)))}</span>${every(m) > 1 ? ` <span class="badge b-mut">${h(freqLabel(m))}</span>` : ''}</div>`;
-      if (!L) html += `<button class="okb" onclick="A.mark('${sl.id}','${m.id}','given')">✓ ${t('give')}</button><button onclick="A.mark('${sl.id}','${m.id}','skipped')">✗ ${t('skip')}</button>`;
-      else if (L.status === 'given') html += `<span class="muted">${t('given')}</span><input type="time" value="${h(L.time)}" onchange="A.setTime('${sl.id}','${m.id}',this.value)"><button class="small" onclick="A.mark('${sl.id}','${m.id}')">${t('undo')}</button>`;
-      else html += `<span class="muted">${t('skippedLbl')}</span><button class="small" onclick="A.mark('${sl.id}','${m.id}')">${t('undo')}</button>`;
-      html += `</div>`;
+      body += `<div class="med ${L ? L.status : ''}" data-q="${h((m.name + ' ' + sl.time + ' ' + sl.label).toLowerCase())}"><div class="n"><b>${h(m.name)}</b> <span class="muted">${fmtN(num(e.qty))} ${h(unitFor(m.unit, num(e.qty)))}</span>${every(m) > 1 ? ` <span class="badge b-mut">${h(freqLabel(m))}</span>` : ''}</div>`;
+      if (!L) body += `<button class="okb" onclick="A.mark('${sl.id}','${m.id}','given')">✓ ${t('give')}</button><button onclick="A.mark('${sl.id}','${m.id}','skipped')">✗ ${t('skip')}</button>`;
+      else if (L.status === 'given') body += `<span class="muted">${t('given')}</span><input type="time" value="${h(L.time)}" onchange="A.setTime('${sl.id}','${m.id}',this.value)"><button class="small" onclick="A.mark('${sl.id}','${m.id}')">${t('undo')}</button>`;
+      else body += `<span class="muted">${t('skippedLbl')}</span><button class="small" onclick="A.mark('${sl.id}','${m.id}')">${t('undo')}</button>`;
+      body += `</div>`;
     });
-    html += `</div>`;
+    const right = entries.length ? `<span class="badge ${done === entries.length ? 'b-ok' : 'b-mut'}">✓ ${done}/${entries.length}</span>` : '';
+    html += fold('td_' + sl.id, sl === firstOpen, `<span class="time">${h(sl.time)}</span> <span class="muted" style="font-weight:400">${h(sl.label)}</span>`, right, body, 'slot fg');
   });
-  return html;
+  return html + noMatchP();
 }
 const exportTables = {
   stock: () => ({
@@ -618,27 +640,26 @@ function viewTherapy() {
   let html = `<div class="card"><div class="row between"><h2>${t('slots')}</h2><button class="pri" onclick="A.addSlot()">+ ${t('addSlot')}</button></div>`;
   if (!S.meds.length) html += `<div class="muted">${t('noMedsYet')}</div>`;
   html += `</div>`;
+  if (S.schedule.length) html = searchBar('searchMedName') + html;
   slotsSorted().forEach(sl => {
-    html += `<div class="card slot"><div class="row"><input type="time" value="${h(sl.time)}" onchange="A.slotField('${sl.id}','time',this.value)">
+    const es = S.schedule.filter(e => e.slotId === sl.id && medById(e.medId));
+    let body = `<div class="row"><input type="time" value="${h(sl.time)}" onchange="A.slotField('${sl.id}','time',this.value)">
       <input class="grow" placeholder="${h(t('label'))}" value="${h(sl.label)}" onchange="A.slotField('${sl.id}','label',this.value)">
       <button class="small danger" title="${h(t('removeSlot'))}" onclick="A.delSlot('${sl.id}')">🗑</button></div>`;
-    S.schedule.filter(e => e.slotId === sl.id && medById(e.medId)).forEach(e => {
+    es.forEach(e => {
       const m = medById(e.medId);
-      html += `<div class="med"><div class="n">${h(m.name)} <span class="muted" style="font-size:13px">${h(freqLabel(m))}</span></div><input type="number" min="0" step="0.25" value="${e.qty}" onchange="A.entryQty('${e.id}',this.value)"> <span class="muted">${h(unitFor(m.unit, num(e.qty)))}</span>
+      body += `<div class="med" data-q="${h((m.name + ' ' + sl.time + ' ' + sl.label).toLowerCase())}"><div class="n">${h(m.name)} <span class="muted" style="font-size:13px">${h(freqLabel(m))}</span></div><input type="number" min="0" step="0.25" value="${e.qty}" onchange="A.entryQty('${e.id}',this.value)"> <span class="muted">${h(unitFor(m.unit, num(e.qty)))}</span>
         <button class="small danger" onclick="A.delEntry('${e.id}')">✕</button></div>`;
     });
-    if (S.meds.length) html += `<div class="med"><select class="n" id="sel_${sl.id}"><option value="">${t('selectMed')}</option>${S.meds.map(m => `<option value="${m.id}">${h(m.name)}</option>`).join('')}</select>
+    if (S.meds.length) body += `<div class="med"><select class="n" id="sel_${sl.id}"><option value="">${t('selectMed')}</option>${S.meds.map(m => `<option value="${m.id}">${h(m.name)}</option>`).join('')}</select>
       <input type="number" id="qty_${sl.id}" min="0" step="0.25" value="1" aria-label="${h(t('qty'))}"><button onclick="A.addEntry('${sl.id}')">+ ${t('addToSlot')}</button></div>`;
-    html += `</div>`;
+    html += fold('tp_' + sl.id, false, `<span class="time">${h(sl.time)}</span> <span class="muted" style="font-weight:400">${h(sl.label)}</span>`,
+      `<span class="qt">${es.length} ${t(es.length === 1 ? 'med1' : 'medN')}</span>`, body, 'slot fg');
   });
-  return html + exportBtns('therapy');
-}
-function stockMatch(m) {
-  const q = stockQ.trim().toLowerCase();
-  return !q || [m.name, m.value ?? '', m.notes || ''].join(' ').toLowerCase().includes(q);
+  return html + noMatchP() + exportBtns('therapy');
 }
 function viewStock() {
-  let html = S.meds.length ? `<div class="search"><input type="search" id="stockQ" value="${h(stockQ)}" placeholder="🔍 ${h(t('searchMed'))}" aria-label="${h(t('searchMed'))}" oninput="A.stockSearch(this.value)"></div>` : '';
+  let html = S.meds.length ? searchBar('searchMed') : '';
   html += `<div class="card"><h2>${t('addMed')}</h2><div class="row">
     <input class="grow" id="mName" placeholder="${h(t('name'))}">
     <input id="mUnit" placeholder="${h(t('unit'))}" value="${h(t('unitDefault'))}" style="width:120px">
@@ -648,8 +669,8 @@ function viewStock() {
   S.meds.forEach(m => {
     const need = dailyNeed(m.id), thr = threshold(m.id), st = num(m.stock);
     const badge = need <= 0 ? `<span class="badge b-mut">${t('notInTherapy')}</span>` : st < thr ? `<span class="badge b-bad">${t('short')} · ${t('missing')} ${fmtN(thr - st)}</span>` : `<span class="badge b-ok">${t('ok')}</span>`;
-    html += `<details class="card mc" data-q="${h([m.name, m.value ?? '', m.notes || ''].join(' ').toLowerCase())}" ${stockOpen.has(m.id) ? 'open' : ''} ontoggle="A.stockToggle('${m.id}',this.open)"${stockMatch(m) ? '' : ' hidden'}>
-      <summary><span class="ar">▶</span><span class="nm">${h(m.name)}</span><span class="rt"><span class="qt">${fmtN(st)} ${h(unitFor(m.unit, st))}</span>${badge}</span></summary><div class="body">
+    html += `<details class="card mc" data-k="m_${m.id}" data-def="0" data-q="${h([m.name, m.value ?? '', m.notes || ''].join(' ').toLowerCase())}" ${isOpen('m_' + m.id, false) ? 'open' : ''}>
+      <summary onclick="A.tog(this)"><span class="ar">▶</span><span class="nm">${h(m.name)}</span><span class="rt"><span class="qt">${fmtN(st)} ${h(unitFor(m.unit, st))}</span>${badge}</span></summary><div class="body">
       <label class="f" style="margin-top:0"><span>${t('rename')}</span><input value="${h(m.name)}" onchange="A.medField('${m.id}','name',this.value)" style="font-weight:600"></label>
       <div class="row muted" style="margin:6px 0">${t('inStock')}: <b style="color:var(--fg)">${fmtN(st)} ${h(unitFor(m.unit, st))}</b> · ${t('perDay')}: ${fmtN(need)} (${adminsPerDay(m.id)} ${t('adminsDay')}, ${h(freqLabel(m).toLowerCase())}) · ${t('threshold')}: ${fmtN(thr)}</div>
       <div class="row"><input type="number" id="ld_${m.id}" min="0" placeholder="+" aria-label="${h(t('load'))}"><button onclick="A.loadStock('${m.id}')">${t('load')}: ${t('loadBtn')}</button>
@@ -667,41 +688,45 @@ function viewStock() {
       <div class="row" style="margin-top:8px"><label class="f" style="margin:0"><span>${t('medValue')}</span><input type="text" value="${h(m.value ?? '')}" onchange="A.medField('${m.id}','value',this.value)"></label>
       <label class="f grow" style="margin:0"><span>${t('medNotes')}</span><textarea style="min-height:44px" onchange="A.medField('${m.id}','notes',this.value)">${h(m.notes || '')}</textarea></label></div></div></details>`;
   });
-  if (S.meds.length) html += `<p class="muted" id="stockNone" ${S.meds.some(stockMatch) ? 'hidden' : ''}>${t('noMatch')}</p>`;
+  html += noMatchP();
   return html + exportBtns('stock');
 }
 function viewSupply() {
   const days = num(S.settings.cycleDays), ci = cycleInfo();
-  let html = `<div class="card"><h2>${t('supply')}</h2><p class="muted">${h(t('supplyHelp', { a: S.settings.alertDays }))}</p>
+  let html = S.meds.length ? searchBar('searchMedName') : '';
+  let b1 = `<p class="muted" style="margin-top:0">${h(t('supplyHelp', { a: S.settings.alertDays }))}</p>
     <div class="row"><label class="f"><span>${t('containers')}</span><input type="number" min="1" value="${days}" onchange="A.set('cycleDays',this.value)"></label>
     <label class="f"><span>${t('alertDays')}</span><input type="number" min="0" value="${h(S.settings.alertDays)}" onchange="A.set('alertDays',this.value)"></label></div>
     <p class="muted">${t('containersHelp')}</p>`;
-  if (ci) html += `<h3>${t('currentCycle')}</h3><table>
+  if (ci) b1 += `<h3>${t('currentCycle')}</h3><table>
     <tr><td>${t('prepDate')}</td><td>${fmtDate(ci.c.prepDate)}</td></tr>
     <tr><td>${t('cyclePrepared')}</td><td><input type="number" min="1" value="${ci.c.days}" onchange="if(confirm(t('resizeConfirm',{n:this.value})))A.resizeCycle(this.value);else render()"></td></tr>
     <tr><td>${t('startUse')}</td><td>${fmtDate(ci.start)}</td></tr>
     <tr><td>${t('endCycle')}</td><td>${fmtDate(ci.end)}</td></tr>
     <tr><td>${t('alertOn')}</td><td>${fmtDate(ci.alert)}</td></tr></table>
-    ${ci.c.items.filter(i => i.short > 0).map(i => `<div class="neg" style="margin-top:6px">${h(i.name)}: ${h(t(i.short <= 1 ? 'missingForPrep1' : 'missingForPrep', { n: fmtN(i.short), u: unitFor(i.unit, i.short), d: Math.floor(i.taken / (i.need / ci.c.days)), g: unitFor(t('daysWord'), Math.floor(i.taken / (i.need / ci.c.days))) }))}</div>`).join('')}
+    ${ci.c.items.filter(i => i.short > 0).map(i => `<div class="neg" style="margin-top:6px" data-q="${h(i.name.toLowerCase())}">${h(i.name)}: ${h(t(i.short <= 1 ? 'missingForPrep1' : 'missingForPrep', { n: fmtN(i.short), u: unitFor(i.unit, i.short), d: Math.floor(i.taken / (i.need / ci.c.days)), g: unitFor(t('daysWord'), Math.floor(i.taken / (i.need / ci.c.days))) }))}</div>`).join('')}
     ${ci.c.items.some(i => num(i.bk) > 0) ? `<div class="muted" style="margin-top:6px">${t('bkSetAside')}: ${ci.c.items.filter(i => num(i.bk) > 0).map(i => h(`${i.name} ${fmtN(i.bk)} ${unitFor(i.unit, i.bk)}`)).join(', ')}</div>` : ''}
     <div style="margin-top:8px"><button class="danger" onclick="A.undoPrep()">${t('undoPrep')}</button></div>`;
-  html += `</div><div class="card"><h2>${t('prepare', { n: days })}</h2>
-    <label class="f"><span>${t('prepDate')}</span><input type="date" value="${prepDateSel}" onchange="prepDateSel=this.value"></label>
+  html += fold('sp_set', false, t('supply'), ci ? `<span class="qt">${t('endCycle')}: ${fmtDate(ci.end)}</span>` : '', b1, 'fg');
+  let b2 = `<label class="f" style="margin-top:0"><span>${t('prepDate')}</span><input type="date" value="${prepDateSel}" onchange="prepDateSel=this.value"></label>
     <h3>${t('preview')}</h3><div style="overflow-x:auto"><table style="font-size:14px"><tr><th class="num">${t('inStock')}</th><th class="num">${t('need')}</th><th class="num">${t('bk').replace('_','_<wbr>')}</th><th class="num">${t('after')}</th></tr>`;
   S.meds.filter(m => dailyNeed(m.id) > 0).forEach(m => {
     const need = needFor(m.id, prepDateSel, days), bk = num(bkSel[m.id]), after = num(m.stock) - need - bk;
-    html += `<tr><td colspan="4" style="border-bottom:0;padding-bottom:0;font-weight:600">${h(m.name)}</td></tr><tr><td class="num">${fmtN(num(m.stock))}</td><td class="num">${fmtN(need)}</td><td class="num"><div style="font-weight:600">${fmtN(num(m.bk))}</div><div style="white-space:nowrap">+ <input type="number" min="0" step="1" value="${bk || ''}" placeholder="0" style="width:48px;padding:4px 6px" aria-label="${h(t('bk'))}" onchange="bkSel['${m.id}']=Math.max(0,num(this.value));render()"></div></td><td class="num ${after < 0 ? 'neg' : ''}">${fmtN(after)}</td></tr>`;
+    const dq = h(m.name.toLowerCase());
+    b2 += `<tr data-q="${dq}"><td colspan="4" style="border-bottom:0;padding-bottom:0;font-weight:600">${h(m.name)}</td></tr><tr data-q="${dq}"><td class="num">${fmtN(num(m.stock))}</td><td class="num">${fmtN(need)}</td><td class="num"><div style="font-weight:600">${fmtN(num(m.bk))}</div><div style="white-space:nowrap">+ <input type="number" min="0" step="1" value="${bk || ''}" placeholder="0" style="width:48px;padding:4px 6px" aria-label="${h(t('bk'))}" onchange="bkSel['${m.id}']=Math.max(0,num(this.value));render()"></div></td><td class="num ${after < 0 ? 'neg' : ''}">${fmtN(after)}</td></tr>`;
   });
-  html += `</table></div><p class="muted" style="margin-top:6px">${t('bkPrepHelp')}</p><div style="margin-top:10px"><button class="pri" onclick="A.prepare()">📦 ${t('prepare', { n: days })}</button></div></div>`;
+  b2 += `</table></div><p class="muted" style="margin-top:6px">${t('bkPrepHelp')}</p><div style="margin-top:10px"><button class="pri" onclick="A.prepare()">📦 ${t('prepare', { n: days })}</button></div>`;
+  html += fold('sp_prep', false, t('prepare', { n: days }), '', b2, 'fg');
   const sh = shortages();
-  html += `<div class="card" id="short"><h2>${t('shortList')} (${sh.length})</h2><p class="muted">${t('shortHelp', { n: days, m: days * 2 })}</p>`;
-  html += sh.length ? `<table><tr><th></th><th class="num">${t('inStock')}</th><th class="num">${t('threshold')}</th><th class="num">${t('missing')}</th></tr>${sh.map(s => `<tr><td>${h(s.m.name)}</td><td class="num">${fmtN(s.stock)}</td><td class="num">${fmtN(s.thr)}</td><td class="num neg">${fmtN(s.miss)} ${h(unitFor(s.m.unit, s.miss))}</td></tr>`).join('')}</table>` : `<div class="muted">${t('noShort')}</div>`;
-  html += `<h3 style="margin-top:12px">${t('message')}</h3><pre>${h(shortMessage())}</pre>
+  let b3 = `<p class="muted" style="margin-top:0">${t('shortHelp', { n: days, m: days * 2 })}</p>`;
+  b3 += sh.length ? `<table><tr><th></th><th class="num">${t('inStock')}</th><th class="num">${t('threshold')}</th><th class="num">${t('missing')}</th></tr>${sh.map(s => `<tr data-q="${h(s.m.name.toLowerCase())}"><td>${h(s.m.name)}</td><td class="num">${fmtN(s.stock)}</td><td class="num">${fmtN(s.thr)}</td><td class="num neg">${fmtN(s.miss)} ${h(unitFor(s.m.unit, s.miss))}</td></tr>`).join('')}</table>` : `<div class="muted">${t('noShort')}</div>`;
+  b3 += `<h3 style="margin-top:12px">${t('message')}</h3><pre>${h(shortMessage())}</pre>
     ${S.settings.waNumber ? '' : `<p class="muted">${t('waNoNumber')}</p>`}
-    <div class="row"><button class="okb" onclick="A.sendWa()">💬 ${t('sendWa')}</button><button onclick="A.exportShort()">⬇ ${t('exportTxt')}</button><button onclick="A.copyMsg(this)">${t('copy')}</button></div></div>`;
+    <div class="row"><button class="okb" onclick="A.sendWa()">💬 ${t('sendWa')}</button><button onclick="A.exportShort()">⬇ ${t('exportTxt')}</button><button onclick="A.copyMsg(this)">${t('copy')}</button></div>`;
+  html += fold('sp_short', sh.length > 0, t('shortList'), `<span class="badge ${sh.length ? 'b-bad' : 'b-ok'}">${sh.length}</span>`, b3, 'fg', 'id="short"');
   const prev = S.cycles.slice(0, -1).reverse();
-  html += `<div class="card"><h2>${t('history')}</h2>${prev.length ? prev.map(c => `<div>${fmtDate(c.prepDate)} → ${fmtDate(addDays(c.prepDate, c.days))}</div>`).join('') : `<span class="muted">${t('none')}</span>`}</div>`;
-  return html + exportBtns('supply');
+  html += fold('sp_hist', false, t('history'), '', prev.length ? prev.map(c => `<div>${fmtDate(c.prepDate)} → ${fmtDate(addDays(c.prepDate, c.days))}</div>`).join('') : `<span class="muted">${t('none')}</span>`, 'fg');
+  return html + noMatchP() + exportBtns('supply');
 }
 function daysTo(s) { return s ? diffDays(s, todayStr()) : null; }
 function expiringPlans() { return S.docs.filter(d => d.kind === 'plan' && d.expiry && daysTo(d.expiry) <= 30); }
@@ -786,7 +811,7 @@ function renderBanner() {
       const sh = shortages(), k = sh.length;
       const w = ci.left <= 0 ? t('todayWord') : t('inDays', { n: ci.left, g: unitFor(t('daysWord'), ci.left) });
       const list = sh.map(x => `${x.m.name} ${fmtN(x.miss)} ${unitFor(x.m.unit, x.miss)}`).join(', ');
-      out.push(`<div class="${k ? 'b-warn' : 'b-info'}">${k ? '⚠ ' : ''}${h(t(k ? 'alertBanner' : 'alertBannerOk', { w, d: fmtDate(ci.end), c: num(S.settings.cycleDays), list }))}<button class="small" onclick="A.tab('supply');setTimeout(()=>document.getElementById('short').scrollIntoView(),50)">${t('open')}</button></div>`);
+      out.push(`<div class="${k ? 'b-warn' : 'b-info'}">${k ? '⚠ ' : ''}${h(t(k ? 'alertBanner' : 'alertBannerOk', { w, d: fmtDate(ci.end), c: num(S.settings.cycleDays), list }))}<button class="small" onclick="openSt.sp_short=true;A.tab('supply');setTimeout(()=>document.getElementById('short').scrollIntoView(),50)">${t('open')}</button></div>`);
     }
   }
   if (licChecked && !licensed && trialLeft() <= 10) out.push(`<div class="b-warn">⏳ ${t('licEnding', { n: trialLeft() })}<button class="small" onclick="A.tab('help')">${t('open')}</button></div>`);
@@ -809,6 +834,7 @@ function render() {
     document.getElementById('tabs').innerHTML = TABS.map(([k, i, l]) => `<button class="${tab === k ? 'on' : ''}" onclick="A.tab('${k}')"><span class="i">${i}</span><span class="l">${t(l)}</span></button>`).join('');
     renderBanner();
     document.getElementById('view').innerHTML = { today: viewToday, therapy: viewTherapy, stock: viewStock, supply: viewSupply, patient: viewPatient, settings: viewSettings, help: viewHelp }[tab]();
+    applySearch();
   }
   document.documentElement.style.setProperty('--hh', document.querySelector('header').offsetHeight + 'px');
   const ib = document.getElementById('installBtn'); ib.textContent = t('install'); ib.hidden = !deferredPrompt;
